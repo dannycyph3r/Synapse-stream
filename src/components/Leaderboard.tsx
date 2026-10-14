@@ -63,7 +63,7 @@ function Row({ e, pinned = false }: { e: LeaderboardEntry; pinned?: boolean }) {
         <span className="sr-only">{describeFei(e.feiMs)}</span>
       </td>
       <td className="num py-3 pr-4 text-right">{e.completed}</td>
-      <td className="num py-3 text-right">{e.maxLength}</td>
+      <td className="num py-3 text-right max-sm:hidden">{e.maxLength}</td>
     </tr>
   );
 }
@@ -122,7 +122,7 @@ export function Leaderboard() {
               Daily challenge <span className="num text-ink">{today ?? ""}</span> UTC
               {resetIn ? (
                 <>
-                  {" "}· closes in <span className="num text-ink">{resetIn}</span>
+                  {" "}· closes in <span className="num whitespace-nowrap text-ink">{resetIn}</span>
                 </>
               ) : null}
             </>
@@ -171,8 +171,8 @@ export function Leaderboard() {
               Try again
             </button>
           </div>
-        ) : (
-          <table className="w-full min-w-[32rem] border-collapse text-left">
+        ) : snap && snap.entries.length === 0 ? null : (
+          <table className="w-full min-w-[19rem] border-collapse text-left">
             <caption className="sr-only">
               {period === "daily" ? `Daily ranking for ${today ?? "today"}` : "All-time ranking"},{" "}
               {division === "spoken" ? "spoken" : "visual"} division.
@@ -183,8 +183,8 @@ export function Leaderboard() {
                 <th scope="col" className="label w-16 py-2 pr-4 font-normal">Rank</th>
                 <th scope="col" className="label py-2 pr-4 font-normal">Player</th>
                 <th scope="col" className="label py-2 pr-4 text-right font-normal">FEI</th>
-                <th scope="col" className="label py-2 pr-4 text-right font-normal">Challenges</th>
-                <th scope="col" className="label py-2 text-right font-normal">Longest</th>
+                <th scope="col" className="label py-2 pr-4 text-right font-normal">Held</th>
+                <th scope="col" className="label py-2 text-right font-normal max-sm:hidden">Longest</th>
               </tr>
             </thead>
             <tbody>
@@ -192,7 +192,7 @@ export function Leaderboard() {
                 ? Array.from({ length: 5 }, (_, i) => (
                     <tr key={i} className="border-b border-rule" aria-hidden="true">
                       {[2, 10, 5, 3, 3].map((w, j) => (
-                        <td key={j} className="py-3.5 pr-4">
+                        <td key={j} className={`py-3.5 pr-4 ${j === 4 ? "max-sm:hidden" : ""}`}>
                           <span className={`block h-3 bg-rule ${j >= 2 ? "ml-auto" : ""}`} style={{ width: `${w}ch` }} />
                         </td>
                       ))}
@@ -205,7 +205,7 @@ export function Leaderboard() {
           </table>
         )}
         {snap && snap.entries.length === 0 ? (
-          <div className="border-b border-rule py-10">
+          <div className="border-y border-ink py-10">
             <p className="font-semibold">{period === "daily" ? "No runs posted for today yet." : "No runs posted yet."}</p>
             <p className="mt-1 text-ink-2">
               Play today&apos;s challenge and post your score to open the board.{" "}

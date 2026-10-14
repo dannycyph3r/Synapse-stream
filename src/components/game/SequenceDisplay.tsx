@@ -4,7 +4,8 @@ import { forwardRef } from "react";
 import { Check } from "lucide-react";
 import { TokenGlyph } from "@/components/TokenGlyph";
 import { observePosition, visibleToken, type GameState } from "@/lib/game/engine";
-import { formatDelta } from "@/lib/game/scoring";
+import { difficultyFor } from "@/lib/game/rules";
+import { formatDelta, formatDuration } from "@/lib/game/scoring";
 import { tokenLabel } from "@/lib/game/tokens";
 
 /**
@@ -18,6 +19,10 @@ export const SequenceDisplay = forwardRef<HTMLDivElement, { state: GameState; sp
   function SequenceDisplay({ state, spoken }, ref) {
     const c = state.challenge;
     const token = visibleToken(state);
+    const next =
+      state.status === "feedback" && state.config
+        ? difficultyFor(state.config.rules, state.config.offset + state.completed)
+        : null;
     const isDissolve = state.status === "observing" && !!c && state.observeStep === c.length * 2 - 1;
 
     let body: React.ReactNode = null;
@@ -54,6 +59,11 @@ export const SequenceDisplay = forwardRef<HTMLDivElement, { state: GameState; sp
           <div className="fade-in grid place-items-center gap-3 text-center">
             <Check aria-hidden="true" className="size-14" strokeWidth={1.75} />
             <span className="num text-[1.75rem] leading-none">{formatDelta(state.lastContributionMs)}</span>
+            {next ? (
+              <span className="num mt-2 text-small text-on-inverse-2">
+                Next · {next.length} tokens · {formatDuration(next.durationMs)}
+              </span>
+            ) : null}
           </div>
         );
         break;

@@ -15,22 +15,29 @@ export function FocusMetrics({ challenge, length, durationMs, streak, feiMs }: M
   const items = [
     { label: "Challenge", short: "Ch", value: pad(challenge) },
     { label: "Length", short: "Len", value: pad(length) },
-    { label: "Rate", short: "Rate", value: formatDuration(durationMs) },
+    { label: "Rate", short: "Rate", value: formatDuration(durationMs), compact: formatDuration(durationMs).replace(" ", "") },
     { label: "Streak", short: "Strk", value: pad(streak) },
     { label: "Banked FEI", short: "FEI", value: formatFei(feiMs) },
   ];
   return (
     <dl className="grid grid-cols-[1fr_1fr_1fr_1fr_1.55fr] border-y border-ink">
       {items.map((item, i) => (
-        <div key={item.label} className={`px-2 py-2 sm:px-3 ${i > 0 ? "border-l border-rule" : ""}`}>
+        <div key={item.label} className={`px-1.5 py-2 sm:px-3 ${i > 0 ? "border-l border-rule" : ""}`}>
           <dt className="label">
             <span className="sm:hidden" aria-hidden="true">
               {item.short}
             </span>
             <span className="max-sm:sr-only">{item.label}</span>
           </dt>
-          <dd className={`num mt-0.5 text-[1rem] leading-6 sm:text-[1.3rem] sm:leading-7 ${i === 4 ? "font-semibold" : ""}`}>
-            {item.value}
+          <dd className={`num mt-0.5 whitespace-nowrap text-[1rem] leading-6 sm:text-[1.3rem] sm:leading-7 ${i === 4 ? "font-semibold" : ""}`}>
+            {"compact" in item ? (
+              <>
+                <span className="sm:hidden">{item.compact}</span>
+                <span className="max-sm:hidden">{item.value}</span>
+              </>
+            ) : (
+              item.value
+            )}
           </dd>
         </div>
       ))}

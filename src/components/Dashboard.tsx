@@ -20,7 +20,9 @@ function Readout({ label, ms, note }: { label: string; ms: number | null; note: 
       <dt className="label">{label}</dt>
       <dd className="mt-1.5">
         <span className="num block text-metric font-medium tracking-[-0.03em]">
-          <span aria-hidden="true">{ms === null ? "--:--.-" : formatFei(ms)}</span>
+          <span aria-hidden="true" className={ms === null ? "text-ink-2" : undefined}>
+            {ms === null ? "--:--.-" : formatFei(ms)}
+          </span>
           <span className="sr-only">{ms === null ? "No record yet" : describeFei(ms)}</span>
         </span>
         <span className="mt-1 block text-small text-ink-2">{note}</span>
@@ -118,7 +120,7 @@ function DailyPanel({ data }: { data: StoredData }) {
           {resetIn ? (
             <>
               {" "}
-              Resets in <span className="num text-ink">{resetIn}</span>.
+              Resets in <span className="num whitespace-nowrap text-ink">{resetIn}</span>.
             </>
           ) : null}
         </p>
@@ -172,7 +174,7 @@ export function Dashboard() {
   return (
     <>
       <section className="grid gap-x-10 gap-y-12 pb-16 pt-12 sm:pt-16 md:grid-cols-12">
-        <div className="md:col-span-7">
+        <div className="md:col-span-8">
           <p className="label">01 / Session</p>
           <h1 className="mt-5 text-display font-semibold">
             Enter the stream.
@@ -197,7 +199,7 @@ export function Dashboard() {
           </p>
         </div>
 
-        <aside aria-labelledby="records-heading" className="md:col-span-5 md:border-l md:border-rule md:pl-10">
+        <aside aria-labelledby="records-heading" className="md:col-span-4 md:border-l md:border-rule md:pl-8">
           <h2 id="records-heading" className="label mb-4 !text-ink">
             Instrument readout
           </h2>
@@ -213,15 +215,17 @@ export function Dashboard() {
                 ms={practiceBest && practiceBest.runs > 0 ? practiceBest.bestFeiMs : null}
                 note={practiceBest && practiceBest.runs > 0 ? `Best streak ${practiceBest.bestStreak}` : "No practice run at this level yet"}
               />
-              <div className="grid grid-cols-2 gap-4 pt-4">
-                <div>
-                  <dt className="label">Last run</dt>
-                  <dd className="num mt-1 text-[1.25rem]">{last ? formatFei(last.feiMs) : DASH}</dd>
-                </div>
-                <div>
-                  <dt className="label">Best streak</dt>
-                  <dd className="num mt-1 text-[1.25rem]">{agg && agg.bestStreak > 0 ? agg.bestStreak : DASH}</dd>
-                </div>
+            </dl>
+          ) : null}
+          {data ? (
+            <dl className="grid grid-cols-2 gap-4 pt-4">
+              <div>
+                <dt className="label">Last run</dt>
+                <dd className="num mt-1 text-[1.25rem]">{last ? formatFei(last.feiMs) : DASH}</dd>
+              </div>
+              <div>
+                <dt className="label">Best streak</dt>
+                <dd className="num mt-1 text-[1.25rem]">{agg && agg.bestStreak > 0 ? agg.bestStreak : DASH}</dd>
               </div>
             </dl>
           ) : (

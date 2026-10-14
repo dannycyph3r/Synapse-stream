@@ -32,7 +32,7 @@ function RadioGroup<T extends string>({
 }) {
   const id = useId();
   return (
-    <fieldset className="grid gap-3 border-t border-rule py-6 md:grid-cols-12" aria-describedby={description ? `${id}-d` : undefined}>
+    <fieldset className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 border-t border-rule py-6 md:grid-cols-12" aria-describedby={description ? `${id}-d` : undefined}>
       <div className="md:col-span-4">
         <legend className="float-left font-semibold">{legend}</legend>
         {description ? (
@@ -72,7 +72,7 @@ function RadioGroup<T extends string>({
 function Switch({ label, description, checked, onChange }: { label: string; description: string; checked: boolean; onChange: (v: boolean) => void }) {
   const id = useId();
   return (
-    <div className="grid gap-3 border-t border-rule py-6 md:grid-cols-12">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-3 border-t border-rule py-6 md:grid-cols-12">
       <div className="md:col-span-4">
         <p id={`${id}-l`} className="font-semibold">
           {label}
@@ -124,7 +124,7 @@ function NameField({ initial }: { initial: string }) {
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="grid gap-3 border-t border-rule py-6 md:grid-cols-12">
+    <form onSubmit={onSubmit} noValidate className="grid grid-cols-[minmax(0,1fr)] gap-3 border-t border-rule py-6 md:grid-cols-12">
       <div className="md:col-span-4">
         <label htmlFor={`${id}-n`} className="font-semibold">
           Leaderboard name

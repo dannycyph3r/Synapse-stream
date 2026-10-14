@@ -108,7 +108,7 @@
   --text-title--letter-spacing: -0.02em;
   --text-metric: 2.5rem;
   --text-metric--line-height: 1;
-  --text-display: clamp(2.75rem, 7.2vw, 6rem);
+  --text-display: clamp(2.75rem, 6.4vw, 5.25rem);
   --text-display--line-height: 0.94;
   --text-display--letter-spacing: -0.045em;
 }

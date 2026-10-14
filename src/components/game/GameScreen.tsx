@@ -233,9 +233,10 @@ function GameController({
 
   // Keyboard play. Digits pick tokens; Enter and Space are left to a focused
   // button so one key press can never both pick and submit.
-  const handlers = useRef({ select, undo, clear, submit, status, dispatch });
+  const full = !!state.challenge && state.answer.length === state.challenge.length;
+  const handlers = useRef({ select, undo, clear, submit, status, dispatch, full });
   useEffect(() => {
-    handlers.current = { select, undo, clear, submit, status, dispatch };
+    handlers.current = { select, undo, clear, submit, status, dispatch, full };
   });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -262,7 +263,9 @@ function GameController({
         h.clear();
       } else if (e.key === "Enter") {
         const el = document.activeElement;
-        if (el instanceof HTMLButtonElement || el instanceof HTMLInputElement) return;
+        // On a token key with a complete answer, Enter cannot add a token, so it submits.
+        const onTokenKey = el instanceof HTMLElement && el.classList.contains("token-key");
+        if (!(onTokenKey && h.full) && (el instanceof HTMLButtonElement || el instanceof HTMLInputElement)) return;
         e.preventDefault();
         if (!e.repeat) h.submit();
       }
@@ -311,7 +314,7 @@ function GameController({
         : state.status === "recalling"
           ? "Rebuild it in order"
           : state.status === "feedback"
-            ? "Held. Next stream loading"
+            ? "Held. The next stream follows"
             : "Paused";
 
   return (
