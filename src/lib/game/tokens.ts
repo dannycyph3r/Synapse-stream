@@ -11,7 +11,7 @@ export const TOKEN_IDS = [
   "triangle",
   "diamond",
   "cross",
-  "hexagon",
+  "bars",
   "star",
   "arc",
 ] as const;

@@ -1,0 +1,370 @@
+@import "tailwindcss";
+
+/*
+ * Synapse Stream design tokens.
+ *
+ * Every colour in the product resolves to one of these variables. Contrast,
+ * measured with the WCAG 2.x formula:
+ *
+ *   light  ink on canvas 16.90  ink-2 on canvas 6.41  ink-2 on surface 6.81
+ *          line on canvas 3.27 (control boundaries, 3:1 floor)
+ *          on-inverse-2 on inverse 7.80  signal on canvas 5.28
+ *   dark   ink on canvas 15.96  ink-2 on canvas 7.33  ink-2 on surface 6.73
+ *          line on canvas 3.44  on-inverse-2 on inverse 5.48  signal on canvas 6.85
+ *
+ * The hairline `rule` colour is decorative only and never carries meaning.
+ */
+:root {
+  --canvas: #f5f3ee;
+  --surface: #fbfaf7;
+  --ink: #121211;
+  --ink-2: #5a5852;
+  --rule: #dcd8ce;
+  --line: #8a867c;
+  --inverse: #121211;
+  --on-inverse: #f5f3ee;
+  --on-inverse-2: #aba79d;
+  --signal: #b8361f;
+  --focus: #121211;
+  --focus-on-inverse: #f5f3ee;
+
+  --motion-scale: 1;
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --canvas: #0f0f0e;
+  --surface: #191917;
+  --ink: #edeae3;
+  --ink-2: #a3a097;
+  --rule: #2b2a27;
+  --line: #6b6860;
+  --inverse: #e9e5dc;
+  --on-inverse: #0f0f0e;
+  --on-inverse-2: #5c5a54;
+  --signal: #f0775f;
+  --focus: #edeae3;
+  --focus-on-inverse: #0f0f0e;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas: #0f0f0e;
+    --surface: #191917;
+    --ink: #edeae3;
+    --ink-2: #a3a097;
+    --rule: #2b2a27;
+    --line: #6b6860;
+    --inverse: #e9e5dc;
+    --on-inverse: #0f0f0e;
+    --on-inverse-2: #5c5a54;
+    --signal: #f0775f;
+    --focus: #edeae3;
+    --focus-on-inverse: #0f0f0e;
+    color-scheme: dark;
+  }
+}
+
+/* Motion: the player's setting wins; "system" follows the OS preference. */
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion="allow"]) {
+    --motion-scale: 0;
+  }
+}
+:root[data-motion="reduce"] {
+  --motion-scale: 0;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-rule: var(--rule);
+  --color-line: var(--line);
+  --color-inverse: var(--inverse);
+  --color-on-inverse: var(--on-inverse);
+  --color-on-inverse-2: var(--on-inverse-2);
+  --color-signal: var(--signal);
+
+  --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Type scale (1.25 minor third, with a display step). */
+  --text-label: 0.6875rem;
+  --text-label--line-height: 1rem;
+  --text-label--letter-spacing: 0.12em;
+  --text-small: 0.8125rem;
+  --text-small--line-height: 1.25rem;
+  --text-body: 1rem;
+  --text-body--line-height: 1.55rem;
+  --text-lead: 1.1875rem;
+  --text-lead--line-height: 1.75rem;
+  --text-title: 1.75rem;
+  --text-title--line-height: 2.1rem;
+  --text-title--letter-spacing: -0.02em;
+  --text-metric: 2.5rem;
+  --text-metric--line-height: 1;
+  --text-display: clamp(2.75rem, 7.2vw, 6rem);
+  --text-display--line-height: 0.94;
+  --text-display--letter-spacing: -0.045em;
+}
+
+@layer base {
+  html {
+    background: var(--canvas);
+    color: var(--ink);
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    min-height: 100dvh;
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.55;
+    font-feature-settings: "cv11", "ss01";
+  }
+  ::selection {
+    background: var(--ink);
+    color: var(--canvas);
+  }
+  /* One visible focus style everywhere, never removed. */
+  :focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+  .on-inverse :focus-visible {
+    outline-color: var(--focus-on-inverse);
+  }
+  /* The hidden attribute must win over any display utility. */
+  [hidden] {
+    display: none !important;
+  }
+}
+
+@layer components {
+  .label {
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    line-height: var(--text-label--line-height);
+    letter-spacing: var(--text-label--letter-spacing);
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "zero" 0;
+  }
+
+  .skip-link {
+    position: absolute;
+    left: 1rem;
+    top: -10rem;
+    z-index: 100;
+    padding: 0.75rem 1rem;
+    background: var(--ink);
+    color: var(--canvas);
+    font-weight: 600;
+  }
+  .skip-link:focus {
+    top: 1rem;
+    outline-color: var(--signal);
+  }
+
+  /* Buttons: square-edged, 48px tall, boundary at 3:1 or better. */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.625rem;
+    min-height: 3rem;
+    padding: 0 1.25rem;
+    border: 1px solid var(--ink);
+    font-weight: 550;
+    font-size: 0.9375rem;
+    letter-spacing: -0.005em;
+    transition: background-color calc(140ms * var(--motion-scale)), color calc(140ms * var(--motion-scale));
+    touch-action: manipulation;
+    user-select: none;
+  }
+  .btn-primary {
+    background: var(--ink);
+    color: var(--canvas);
+  }
+  .btn-primary:hover {
+    background: color-mix(in oklab, var(--ink) 86%, var(--canvas));
+  }
+  .btn-secondary {
+    background: transparent;
+    color: var(--ink);
+    border-color: var(--line);
+  }
+  .btn-secondary:hover {
+    border-color: var(--ink);
+    background: var(--surface);
+  }
+  .btn-quiet {
+    border-color: transparent;
+    background: transparent;
+    color: var(--ink);
+    padding: 0 0.75rem;
+  }
+  .btn-quiet:hover {
+    background: var(--surface);
+  }
+  .btn[aria-disabled="true"] {
+    background: transparent;
+    color: var(--ink-2);
+    border-color: var(--line);
+    border-style: dashed;
+    cursor: not-allowed;
+  }
+
+  .link {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+  }
+  .link:hover {
+    text-decoration-thickness: 2px;
+  }
+
+  .rule-top {
+    border-top: 1px solid var(--rule);
+  }
+
+  /* Stage: the single dominant surface during play. */
+  .stage {
+    position: relative;
+    background: var(--inverse);
+    color: var(--on-inverse);
+    aspect-ratio: 1 / 1;
+    width: min(100%, 40dvh, 26rem);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+  }
+  .stage-glyph {
+    width: 54%;
+    height: 54%;
+    animation: glyph-in calc(160ms * var(--motion-scale)) var(--ease-out) both;
+  }
+  .dissolve {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 1.4 -0.2'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    opacity: 0;
+    animation: dissolve calc(450ms * var(--motion-scale)) linear both;
+  }
+
+  .fade-in {
+    animation: fade-in calc(220ms * var(--motion-scale)) var(--ease-out) both;
+  }
+
+  /* Keypad token buttons. */
+  .token-key {
+    position: relative;
+    display: grid;
+    grid-template-rows: 1fr auto;
+    place-items: center;
+    gap: 0.25rem;
+    min-height: 4.25rem;
+    padding: 0.625rem 0.25rem 0.5rem;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color calc(100ms * var(--motion-scale)), border-color calc(100ms * var(--motion-scale));
+  }
+  .token-key:hover {
+    border-color: var(--ink);
+  }
+  .token-key:active {
+    background: var(--ink);
+    color: var(--canvas);
+  }
+  .token-key-key {
+    position: absolute;
+    top: 0.3rem;
+    left: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    line-height: 1;
+    color: var(--ink-2);
+  }
+  .token-key:active .token-key-key {
+    color: inherit;
+  }
+
+  .slot {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1 / 1;
+    border: 1px solid var(--line);
+    color: var(--ink);
+  }
+  .slot[data-state="filled"] {
+    border-color: var(--ink);
+    background: var(--surface);
+  }
+  .slot[data-state="current"] {
+    border: 2px solid var(--ink);
+  }
+  .slot[data-state="seen"] {
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+
+  dialog.panel {
+    margin: auto;
+    padding: 0;
+    border: 1px solid var(--ink);
+    background: var(--canvas);
+    color: var(--ink);
+    width: min(28rem, calc(100% - 2rem));
+  }
+  dialog.panel::backdrop {
+    background: color-mix(in oklab, var(--canvas) 70%, transparent);
+    backdrop-filter: blur(2px);
+  }
+}
+
+@keyframes glyph-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* A single fade from faint grain to nothing. Never flickers or repeats. */
+@keyframes dissolve {
+  from {
+    opacity: 0.32;
+  }
+  to {
+    opacity: 0;
+  }
+}

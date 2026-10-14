@@ -65,8 +65,12 @@ export function updateSettings(patch: Partial<Settings>): void {
   updateData((d) => ({ ...d, settings: { ...d.settings, ...patch } }));
 }
 
+/**
+ * Clears statistics, recent runs and settings. Daily entries and the player id
+ * are kept, so clearing records cannot be used to replay today's ranked run.
+ */
 export function resetAllData(): void {
-  updateData((d) => defaultData(d.playerId));
+  updateData((d) => ({ ...defaultData(d.playerId), daily: d.daily }));
 }
 
 export function isStoragePersistent(): boolean {
