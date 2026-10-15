@@ -1,76 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { SectionLabel } from "./AppShell";
+import Link from "next/link";
+import { PageTitle, SectionLabel } from "./AppShell";
 import { announce } from "./Announcer";
-import { RecentTable, categoryLabel } from "./Dashboard";
+import { RecentTable, categoryLabel } from "./RecentRuns";
 import { Dialog } from "./Dialog";
-import { STANDARD_RULES, difficultyFor } from "@/lib/game/rules";
-import { describeFei, formatDuration, formatFei } from "@/lib/game/scoring";
+import { describeFei, formatFei } from "@/lib/game/scoring";
 import { aggregateStats } from "@/lib/storage/schema";
 import { resetAllData, useStoredData } from "@/lib/storage/store";
 
 const DASH = "–";
-
-export function ScoringExplainer() {
-  const rows = [0, 1, 2, 3, 4].map((c) => {
-    const d = difficultyFor(STANDARD_RULES, c);
-    return { n: c + 1, ...d, ms: d.length * d.durationMs };
-  });
-  let running = 0;
-  return (
-    <div className="grid gap-8 md:grid-cols-2">
-      <div className="max-w-[36rem]">
-        <p className="num border border-ink p-4 text-[1.0625rem] leading-relaxed">
-          FEI = &Sigma; (sequence length &times; time per token)
-          <br />
-          <span className="text-ink-2">over every correctly completed challenge</span>
-        </p>
-        <ul className="mt-5 grid gap-2 text-ink-2">
-          <li>A challenge adds its presentation time only once its whole sequence is submitted in the right order.</li>
-          <li>Waiting before you submit, pausing, or switching tabs adds nothing. The score comes from the schedule, not the clock.</li>
-          <li>An incorrect challenge adds nothing and ends the run.</li>
-          <li>
-            Sequences start at {STANDARD_RULES.initialLength} tokens for {formatDuration(STANDARD_RULES.initialDurationMs)} each,
-            gain a token every {STANDARD_RULES.lengthEvery} challenges up to {STANDARD_RULES.maxLength}, and speed up by 0.1 s every{" "}
-            {STANDARD_RULES.durationEvery} challenges down to {formatDuration(STANDARD_RULES.minDurationMs)}. The spoken division
-            stops at 1.0 s so words are never cut off.
-          </li>
-          <li>
-            FEI is a game score: the presentation time you held and rebuilt under these rules. It is not a measurement of
-            attention or of any cognitive ability.
-          </li>
-        </ul>
-      </div>
-      <table className="w-full max-w-[28rem] self-start border-collapse text-left">
-        <caption className="label mb-2 text-left !text-ink">Worked example: the first five challenges</caption>
-        <thead>
-          <tr className="border-b border-ink">
-            <th scope="col" className="label py-2 pr-3 font-normal">Ch</th>
-            <th scope="col" className="label py-2 pr-3 text-right font-normal">Length</th>
-            <th scope="col" className="label py-2 pr-3 text-right font-normal">Each</th>
-            <th scope="col" className="label py-2 pr-3 text-right font-normal">Adds</th>
-            <th scope="col" className="label py-2 text-right font-normal">FEI</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => {
-            running += r.ms;
-            return (
-              <tr key={r.n} className="border-b border-rule">
-                <td className="num py-2 pr-3">{String(r.n).padStart(2, "0")}</td>
-                <td className="num py-2 pr-3 text-right">{r.length}</td>
-                <td className="num py-2 pr-3 text-right">{formatDuration(r.durationMs)}</td>
-                <td className="num py-2 pr-3 text-right">{(r.ms / 1000).toFixed(1)} s</td>
-                <td className="num py-2 text-right">{formatFei(running)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 export function StatsView() {
   const data = useStoredData();
@@ -92,12 +32,11 @@ export function StatsView() {
   ];
 
   return (
-    <div className="pt-12 sm:pt-16">
-      <p className="label">This device</p>
-      <h1 className="mt-3 text-display font-semibold">Statistics</h1>
+    <div>
+      <PageTitle eyebrow="This device">Statistics</PageTitle>
 
-      <section aria-labelledby="totals-heading" className="mt-10 border-t border-ink pt-5">
-        <SectionLabel index="01" id="totals-heading">
+      <section aria-labelledby="totals-heading" className="mt-8 border-t border-ink pt-5">
+        <SectionLabel id="totals-heading">
           Totals
         </SectionLabel>
         <dl className="mt-5 grid grid-cols-2 gap-px bg-rule sm:grid-cols-3">
@@ -119,8 +58,8 @@ export function StatsView() {
         </dl>
       </section>
 
-      <section aria-labelledby="records-heading" className="mt-16 border-t border-ink pt-5">
-        <SectionLabel index="02" id="records-heading">
+      <section aria-labelledby="records-heading" className="mt-12 border-t border-ink pt-5">
+        <SectionLabel id="records-heading">
           Records by mode
         </SectionLabel>
         {categories.length === 0 ? (
@@ -154,24 +93,21 @@ export function StatsView() {
         )}
       </section>
 
-      <section aria-labelledby="recent-heading" className="mt-16 border-t border-ink pt-5">
-        <SectionLabel index="03" id="recent-heading">
+      <section aria-labelledby="recent-heading" className="mt-12 border-t border-ink pt-5">
+        <SectionLabel id="recent-heading">
           Recent runs
         </SectionLabel>
         {data ? <RecentTable recent={data.recent} /> : null}
       </section>
 
-      <section id="scoring" aria-labelledby="scoring-heading" className="mt-16 scroll-mt-8 border-t border-ink pt-5">
-        <SectionLabel index="04" id="scoring-heading">
+      <p className="mt-12 text-small text-ink-2">
+        <Link href="/help#scoring" className="link">
           How scoring works
-        </SectionLabel>
-        <div className="mt-5">
-          <ScoringExplainer />
-        </div>
-      </section>
+        </Link>
+      </p>
 
-      <section aria-labelledby="data-heading" className="mt-16 border-t border-ink pt-5">
-        <SectionLabel index="05" id="data-heading">
+      <section aria-labelledby="data-heading" className="mt-12 border-t border-ink pt-5">
+        <SectionLabel id="data-heading">
           Your data
         </SectionLabel>
         <p className="mt-3 max-w-[40rem] text-ink-2">

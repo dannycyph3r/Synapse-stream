@@ -1,18 +1,22 @@
-# Synapse Stream
+# SYNAPSE
 
-**Enter the stream. Hold the pattern.**
+**Hold the pattern.**
 
-A minimalist sequence-memory game for the browser. A short stream of abstract symbols appears one at a time and dissolves; you rebuild it in the same order. Every stream you hold makes the next one longer or faster. One miss ends the run.
+A minimal sequence-memory game for the browser. A short sequence of abstract symbols appears one at a time and dissolves; you rebuild it in the same order. Every sequence you hold makes the next one longer or faster. One miss ends the run, and the results show your pattern against the correct one.
 
-Synapse Stream is a focus-training game. It is not a medical, diagnostic or therapeutic tool, and its score is not a measurement of attention or of any cognitive ability.
+SYNAPSE is a focus-training game. It is not a medical, diagnostic or therapeutic tool, and its score is not a measurement of attention or of any cognitive ability.
 
 ## What is in it
 
-- **Dashboard.** Personal bests, today's daily challenge with its UTC reset time, recent runs, and a specimen of the eight tokens.
-- **Gameplay.** A single dominant stage, an instrument strip (challenge, length, rate, streak, banked FEI), position cells that make repeated tokens legible, and an eight-key keypad. Navigation disappears once a run starts.
-- **Results.** Final FEI, comparison with your previous best, challenges completed, longest sequence, highest streak, play again, and a share summary that contains no answers. Practice runs offer an opt-in review of the sequence that ended the run.
-- **Leaderboard.** Daily and all-time rankings per division, your own rank pinned when you are outside the top 25, and distinct loading, empty, error and preview states.
-- **Statistics** and **Settings.** Local records per mode, a worked scoring example, presentation (visual or spoken), practice level, theme, motion, sound and leaderboard name.
+- **Launch screen** (`/`). The wordmark, one statement, a dominant *Begin*, a quiet daily-challenge link, a one-line personal best once one exists, and quiet links to Help, Settings, Leaderboard and Stats. Nothing else.
+- **Gameplay** (`/play`). A single dominant stage, a four-figure instrument strip (round, tokens, time per token, FEI), position cells that make repeated tokens legible, and an eight-key keypad. Navigation disappears once a run starts. Returning players go straight from *Begin* to the countdown; first-time players and every daily run see a three-line start screen.
+- **Failed-pattern reveal.** After a miss the results lead with which positions did not match, then show *Your pattern* above the *Correct pattern*, aligned by position.
+- **Round lines.** A short original line appears after every held round, and a different kind of line after a failed one.
+- **Results.** FEI, previous best, rounds held and longest sequence, play again, and a share summary that contains no answers.
+- **Help** (`/help`). Every instruction lives here: observe and recall, scoring and FEI, what happens after a miss, keyboard controls, modes and ranking, and accessibility options.
+- **Leaderboard**, **Stats** and **Settings**.
+
+The design review that led to the current layout is in [`docs/design-review.md`](docs/design-review.md).
 
 ## Run it
 
@@ -51,11 +55,11 @@ CHROMIUM_PATH=/path/to/chrome npm run test:e2e
 
 ## How a run works
 
-1. **Prepare.** A short rules panel and a 3-2-1 countdown. Once you have seen the rules they fold into a disclosure.
+1. **Prepare.** A 3-2-1 countdown. The first practice run and every daily run open on a three-line start screen.
 2. **Observe.** Tokens appear one at a time for the scheduled duration, with a 0.3 s blank between tokens so a repeat reads as two. After the last token the stage dissolves.
 3. **Recall.** Rebuild the sequence with the keypad, the keys 1 to 8, or touch. Undo and Clear are available; Submit works only when every position is filled. There is no time limit.
-4. **Confirm.** A correct answer banks the challenge's FEI and the next stream begins after a short beat. A wrong answer ends the run.
-5. **Reset.** A new run resets every counter, timer and selection.
+4. **Confirm.** A correct answer banks the round's FEI. A 1.6 s beat shows the gain and a short line, while the strip already shows the coming round. A wrong answer ends the run and reveals the failed pattern.
+5. **Reset.** A new run resets every counter, timer, selection and failure record.
 
 Keyboard: `1` to `8` select tokens, `Backspace` removes the last, `Delete` clears, `Enter` submits, `Escape` or `P` pauses.
 
@@ -93,6 +97,26 @@ The first challenge is worth 3 x 1.5 s = 4.5 s. The formula lives in one place, 
 **Practice.** Unranked, unlimited, independent random seeds, separate records per level. A shareable seed is supported: `/play?mode=practice&seed=ORBIT` replays the same sequences on any device.
 
 **Spoken presentation.** For players who cannot rely on sight, each token name is spoken as it appears (the symbol is shown too). Its fastest pace is 1.0 s instead of 0.6 s so words are not cut off, and because the conditions differ it is recorded and ranked as its own division. If the browser cannot synthesise speech, the option is disabled and runs fall back to visual with a notice.
+
+## Failed-pattern reveal
+
+When a submission does not match, the engine's `submit` transition records a `FailureRecord` in game state: the round, its length and duration, the expected sequence, the submitted answer and the 1-based mismatched positions (`src/lib/game/engine.ts`). The results screen renders that record directly. It never reconstructs the comparison from UI state.
+
+- The record only exists after a submission, so the correct pattern is never in the page before the player has answered.
+- Score, completed count, streak and difficulty are left exactly as they were; the transition goes straight to `ended`, where every further action is ignored.
+- The comparison is a real table: column headers are positions, row headers are *Your pattern* and *Correct pattern*, and every cell carries its token name for screen readers. A mismatch is marked by structure (inverted position number, heavier outline) and named in words, for example "Position 3 did not match." and "At 3 you entered Circle; the pattern had Triangle." Nothing relies on colour.
+- Long sequences are split into blocks of six positions, so twelve tokens fit a 320 px screen without sideways scrolling.
+- Focus moves to the results heading, which is the mismatch sentence; the assertive live region announces it as well.
+
+This applies to ranked daily runs too. Because every player gets the same daily sequences, a revealed daily pattern could be shared. The daily seed is already public (see [Anti-cheat limits](#anti-cheat-limits)), so this does not open a new class of weakness, but it does make one easier to use.
+
+## Round lines
+
+`src/lib/quotes.ts` holds two pools, one for after a held round and one for after a failed round. Every line is original to SYNAPSE and carries no attribution, so none can be misattributed; Help says so. To add a real quotation, give it a `source` naming the exact work and verify the wording and copyright first.
+
+Selection is deterministic per browser tab. `src/lib/quoteSession.ts` keeps a random session seed and a cursor per pool in `sessionStorage`. `selectQuote(kind, seed, index)` walks a seeded shuffle of the pool, so no line repeats until the pool is exhausted, and a new pass never opens with the line that closed the previous one. A run reads the cursor once at its start; the n-th held round shows line `base + n - 1`.
+
+The success line sits inside the stage during the feedback beat, under the gain, so it cannot move any control. It is also appended to the polite announcement. The failure line sits under the score on the results screen. Neither animates beyond the shared fade, which reduced motion removes.
 
 ## Daily challenge generation
 
@@ -136,8 +160,8 @@ The Supabase store is covered by a unit test of its request shapes but has not b
 
 These remain and are stated plainly:
 
-- The daily seed is public so the game can run offline and the server can verify runs. A determined player could compute the sequences ahead of time and submit a perfect run. The fix is a server-paced session: a secret per-day seed (HMAC of the date), the server issuing one challenge at a time, and minimum elapsed-time checks per challenge.
-- A browser game cannot hide its current sequence from its own developer tools. The UI renders only the token on screen and nothing after the observe phase, and never puts token names in live regions in the visual division, but the data is in memory.
+- The daily seed is public so the game can run offline and the server can verify runs. A determined player could compute the sequences ahead of time and submit a perfect run. The failed-pattern reveal also shows one daily sequence to each player who misses it. The fix is a server-paced session: a secret per-day seed (HMAC of the date), the server issuing one challenge at a time, and minimum elapsed-time checks per challenge.
+- A browser game cannot hide its current sequence from its own developer tools. The UI renders only the token on screen and nothing after the observe phase until an answer is submitted, and never puts token names in live regions in the visual division, but the data is in memory.
 - Without accounts, a player can post again under a new device id. Supabase anonymous auth tied to the record would close this.
 - The rate limiter is per server process.
 
@@ -155,23 +179,35 @@ Targets WCAG 2.2 AA and the AODA's reference to it, checked in the implementatio
 - Reduced motion follows the operating system or the in-app setting. It removes fades and the dissolve; token timing is unchanged. Nothing flashes.
 - Reflows at 320 px wide (400% zoom of a 1280 px window) with no sideways scrolling.
 
+## Mobile
+
+The game is laid out mobile first and checked in the browser suite at 320 x 568, 390 x 844, 844 x 390 and 768 x 1024.
+
+- The stage is sized from the small viewport height (`svh`) minus the measured chrome, so recall fits without scrolling even with the address bar showing, from 320 x 568 up.
+- Short landscape screens (height up to 540 px) switch to two columns: stage and cells on the left, keypad on the right.
+- `viewport-fit=cover` with `env(safe-area-inset-*)` padding keeps content clear of notches and home indicators; `overscroll-behavior: none` stops pull-to-refresh during play.
+- Token keys are about 67 x 68 px on a 320 px screen; buttons are 48 px tall. `touch-action: manipulation` removes double-tap zoom; the engine ignores a second Submit.
+- Fixed-height rows (cells, metrics, stage) mean nothing below moves when values or sequence lengths change.
+
 The browser suite runs axe-core on every page and every game state in light and dark themes.
 
 ## Project structure
 
 ```
 src/
-  app/                    routes: / (dashboard), /play, /leaderboard, /stats, /settings
+  app/                    routes: / (launch), /play, /help, /leaderboard, /stats, /settings
     api/leaderboard/      GET board, POST submit (thin wrappers)
     globals.css           design tokens, type scale, component classes
   components/
     game/                 GameScreen, SequenceDisplay, TokenInput, FocusMetrics,
                           PrepareScreen, SessionResults, PostScore
-    Dashboard, Leaderboard, StatsView, SettingsPanel, AppShell, Dialog, Announcer, TokenGlyph, Wordmark
+    game/PatternComparison    the failed-pattern tables
+    Launch, Help, Leaderboard, StatsView, SettingsPanel, RecentRuns, AppShell, Dialog, Announcer, TokenGlyph, Wordmark
   hooks/useGameSession.ts timers, visibility, speech, sound and announcements around the engine
   lib/
     game/                 pure, framework-free: tokens, random, rules, sequence, scoring,
-                          daily, engine (reducer state machine), verify (run replay)
+                          daily, engine (reducer state machine), verify (run replay), feedback (mismatch copy)
+    quotes.ts             round lines and deterministic selection; quoteSession.ts keeps the per-tab cursor
     storage/              local storage schema with field-level recovery, React store
     leaderboard/          shared types and the browser-side service interface
     server/               leaderboard handlers, score stores, rate limiter
@@ -185,7 +221,7 @@ The engine is a reducer over an explicit state machine (`idle -> prepare -> coun
 
 ## Privacy
 
-No accounts, analytics or third-party requests. Fonts are bundled. Records and settings stay in local storage. Nothing leaves the device unless you post a daily score.
+No accounts, analytics or third-party requests. Fonts are bundled. Records and settings stay in local storage under `synapse:v1`; records saved under the earlier `synapse-stream:v1` key are migrated once on first load. Nothing leaves the device unless you post a daily score.
 
 ## Known limitations
 

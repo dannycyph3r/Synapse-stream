@@ -86,7 +86,7 @@ describe("local storage recovery", () => {
   });
 
   it("uses a versioned key", () => {
-    expect(STORAGE_KEY).toBe("synapse-stream:v1");
+    expect(STORAGE_KEY).toBe("synapse:v1");
   });
 });
 

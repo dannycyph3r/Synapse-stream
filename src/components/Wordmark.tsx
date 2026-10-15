@@ -28,10 +28,10 @@ export function Mark({ className }: { className?: string }) {
 
 export function Wordmark({ href = "/" }: { href?: string }) {
   return (
-    <Link href={href} className="inline-flex items-center gap-2.5 py-2 text-ink" aria-label="Synapse Stream, home">
-      <Mark className="size-7" />
-      <span className="text-[1.0625rem] font-[640] tracking-[-0.025em] leading-none">
-        Synapse<span className="font-[380]"> Stream</span>
+    <Link href={href} className="inline-flex min-h-11 items-center gap-2.5 text-ink" aria-label="SYNAPSE, home">
+      <Mark className="size-6" />
+      <span aria-hidden="true" className="text-[0.9375rem] font-[650] leading-none tracking-[0.22em]">
+        SYNAPSE
       </span>
     </Link>
   );

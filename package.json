@@ -1,8 +1,8 @@
 {
-  "name": "synapse-stream",
+  "name": "synapse",
   "version": "0.1.0",
   "private": true,
-  "description": "A minimalist sequence-memory focus game. Enter the stream. Hold the pattern.",
+  "description": "SYNAPSE: a minimal sequence-memory focus game. Hold the pattern.",
   "type": "module",
   "scripts": {
     "dev": "next dev --port 3000",

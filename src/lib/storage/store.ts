@@ -10,7 +10,7 @@
  */
 import { useSyncExternalStore } from "react";
 import { utcDateKey } from "@/lib/game/daily";
-import { STORAGE_KEY, defaultData, loadData, type Settings, type StoredData } from "./schema";
+import { LEGACY_STORAGE_KEY, STORAGE_KEY, defaultData, loadData, type Settings, type StoredData } from "./schema";
 
 type Listener = () => void;
 
@@ -27,6 +27,11 @@ function read(): StoredData {
   let raw: string | null = null;
   try {
     raw = window.localStorage.getItem(STORAGE_KEY);
+    if (raw === null) {
+      // Records saved under the previous product name carry over once.
+      raw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (raw !== null) window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+    }
   } catch {
     persistent = false;
   }

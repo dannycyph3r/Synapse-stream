@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * Synapse Stream design tokens.
+ * SYNAPSE design tokens.
  *
  * Every colour in the product resolves to one of these variables. Contrast,
  * measured with the WCAG 2.x formula:
@@ -108,6 +108,9 @@
   --text-title--letter-spacing: -0.02em;
   --text-metric: 2.5rem;
   --text-metric--line-height: 1;
+  --text-headline: clamp(1.875rem, 4.2vw, 2.625rem);
+  --text-headline--line-height: 1.08;
+  --text-headline--letter-spacing: -0.03em;
   --text-display: clamp(2.75rem, 6.4vw, 5.25rem);
   --text-display--line-height: 0.94;
   --text-display--letter-spacing: -0.045em;
@@ -122,6 +125,8 @@
   }
   body {
     min-height: 100dvh;
+    /* With viewport-fit=cover, keep content clear of notches and home indicators. */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     background: var(--canvas);
     color: var(--ink);
     font-family: var(--font-sans);
@@ -246,7 +251,8 @@
     background: var(--inverse);
     color: var(--on-inverse);
     aspect-ratio: 1 / 1;
-    width: min(100%, 40dvh, 26rem);
+    /* Sized from the small viewport so it never pushes controls under the browser bar. */
+    width: min(100%, var(--stage-size, 26rem));
     display: grid;
     place-items: center;
     overflow: hidden;
@@ -278,6 +284,8 @@
     gap: 0.25rem;
     min-height: 4.25rem;
     padding: 0.625rem 0.25rem 0.5rem;
+    font-size: 0.8125rem;
+    line-height: 1rem;
     border: 1px solid var(--line);
     background: var(--surface);
     color: var(--ink);
@@ -323,6 +331,119 @@
   .slot[data-state="seen"] {
     background: var(--ink);
     border-color: var(--ink);
+  }
+
+  /* Gameplay layout. Mobile first: one column that fits a 320 x 568 screen
+     without scrolling. Short landscape screens get two columns. */
+  .game-root {
+    min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    /* Chrome around the stage: header, metrics, slots, keypad, actions, gaps. */
+    --stage-size: clamp(8.5rem, calc(100svh - 25.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)), 26rem);
+  }
+  .game-main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    align-content: start;
+    gap: 0.75rem;
+    width: 100%;
+    max-width: 34rem;
+    margin-inline: auto;
+    padding: 0.25rem 1rem 1rem;
+  }
+  .game-main > * {
+    width: 100%;
+  }
+  .game-main > .stage {
+    width: min(100%, var(--stage-size, 26rem));
+  }
+  @media (orientation: landscape) and (max-height: 540px) {
+    .game-root {
+      --stage-size: clamp(7rem, calc(100svh - 11.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)), 20rem);
+    }
+    .game-main {
+      max-width: 52rem;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+      grid-template-areas:
+        "metrics metrics"
+        "stage keypad"
+        "slots keypad";
+      column-gap: 1.5rem;
+      row-gap: 0.5rem;
+      align-items: center;
+    }
+    .game-metrics { grid-area: metrics; }
+    .game-main > .stage { grid-area: stage; }
+    .game-slots { grid-area: slots; }
+    .game-keypad { grid-area: keypad; }
+    .token-key { min-height: 3.6rem; padding-top: 0.5rem; }
+  }
+  html:has(.game-root),
+  body:has(.game-root) {
+    /* No pull-to-refresh or rubber-band scrolling under a player's thumb. */
+    overscroll-behavior: none;
+  }
+
+  /* Failed-pattern comparison. Structure, not colour, marks a mismatch:
+     an inverted position number and a heavier outline. */
+  .compare {
+    --cell: min(3.25rem, calc((100vw - 2rem - 4rem - 1.75rem) / 6));
+    border-collapse: separate;
+    border-spacing: 4px;
+    margin-inline: -4px;
+    table-layout: fixed;
+  }
+  .compare thead td {
+    border: 0;
+  }
+  .compare th[scope="row"] {
+    width: 4rem;
+    white-space: normal;
+    line-height: 1.2;
+    padding-right: 0.25rem;
+    text-align: left;
+    vertical-align: middle;
+  }
+  .compare thead th {
+    height: 1.5rem;
+    width: var(--cell);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--ink-2);
+    text-align: center;
+  }
+  .compare thead th[data-miss] {
+    background: var(--ink);
+    color: var(--canvas);
+  }
+  .compare td {
+    width: var(--cell);
+    height: var(--cell);
+    border: 1px solid var(--line);
+    text-align: center;
+    vertical-align: middle;
+    color: var(--ink);
+  }
+  .compare td[data-miss] {
+    border: 2px solid var(--ink);
+    background: var(--surface);
+  }
+  .compare td svg {
+    display: inline-block;
+    width: 58%;
+    height: 58%;
+  }
+
+  .quote {
+    border-left: 2px solid var(--ink);
+    padding-left: 0.875rem;
+    color: var(--ink-2);
+    font-size: var(--text-body);
+    line-height: 1.5;
   }
 
   dialog.panel {

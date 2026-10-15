@@ -4,8 +4,7 @@ import { forwardRef } from "react";
 import { Check } from "lucide-react";
 import { TokenGlyph } from "@/components/TokenGlyph";
 import { observePosition, visibleToken, type GameState } from "@/lib/game/engine";
-import { difficultyFor } from "@/lib/game/rules";
-import { formatDelta, formatDuration } from "@/lib/game/scoring";
+import { formatDelta } from "@/lib/game/scoring";
 import { tokenLabel } from "@/lib/game/tokens";
 
 /**
@@ -15,14 +14,12 @@ import { tokenLabel } from "@/lib/game/tokens";
  * sequence is deliberately not exposed as text. The spoken division carries
  * it through speech instead.
  */
-export const SequenceDisplay = forwardRef<HTMLDivElement, { state: GameState; spoken: boolean }>(
-  function SequenceDisplay({ state, spoken }, ref) {
+export const SequenceDisplay = forwardRef<
+  HTMLDivElement,
+  { state: GameState; spoken: boolean; quote?: string | null }
+>(function SequenceDisplay({ state, spoken, quote = null }, ref) {
     const c = state.challenge;
     const token = visibleToken(state);
-    const next =
-      state.status === "feedback" && state.config
-        ? difficultyFor(state.config.rules, state.config.offset + state.completed)
-        : null;
     const isDissolve = state.status === "observing" && !!c && state.observeStep === c.length * 2 - 1;
 
     let body: React.ReactNode = null;
@@ -45,24 +42,24 @@ export const SequenceDisplay = forwardRef<HTMLDivElement, { state: GameState; sp
         caption = "Recall";
         body = (
           <div className="fade-in grid place-items-center gap-2 text-center">
-            <span className="num text-[clamp(2.5rem,9dvh,4rem)] leading-none">
+            <span className="num text-[clamp(2.25rem,8svh,4rem)] leading-none">
               {state.answer.length}
               <span className="text-on-inverse-2">/{c?.length ?? 0}</span>
             </span>
-            <span className="text-small text-on-inverse-2">Rebuild the sequence in order</span>
+            <span className="text-small text-on-inverse-2">In order</span>
           </div>
         );
         break;
       case "feedback":
         caption = "Held";
         body = (
-          <div className="fade-in grid place-items-center gap-3 text-center">
-            <Check aria-hidden="true" className="size-14" strokeWidth={1.75} />
-            <span className="num text-[1.75rem] leading-none">{formatDelta(state.lastContributionMs)}</span>
-            {next ? (
-              <span className="num mt-2 text-small text-on-inverse-2">
-                Next · {next.length} tokens · {formatDuration(next.durationMs)}
-              </span>
+          <div className="fade-in grid w-full place-items-center gap-[clamp(0.25rem,1.5svh,0.75rem)] px-4 text-center">
+            <Check aria-hidden="true" className="size-[clamp(1.5rem,7svh,3.25rem)]" strokeWidth={1.75} />
+            <span className="num text-[clamp(1.25rem,4svh,1.75rem)] leading-none">{formatDelta(state.lastContributionMs)}</span>
+            {quote ? (
+              <p data-testid="round-quote" className="line-clamp-3 max-w-[18rem] text-[0.8125rem] leading-snug text-on-inverse-2 sm:text-small">
+                {quote}
+              </p>
             ) : null}
           </div>
         );
@@ -91,12 +88,12 @@ export const SequenceDisplay = forwardRef<HTMLDivElement, { state: GameState; sp
             {String(Math.min(observePosition(state), c.length)).padStart(2, "0")} / {String(c.length).padStart(2, "0")}
           </span>
         ) : null}
+
         {body}
         {isDissolve ? <div className="dissolve" aria-hidden="true" /> : null}
       </div>
     );
-  },
-);
+});
 
 /**
  * One cell per position. While observing, cells fill as tokens pass, which is
@@ -105,7 +102,8 @@ export const SequenceDisplay = forwardRef<HTMLDivElement, { state: GameState; sp
  */
 export function SequenceSlots({ state }: { state: GameState }) {
   const c = state.challenge;
-  if (!c) return <div className="h-10" aria-hidden="true" />;
+  // A fixed-height row, so nothing below it moves as sequences change length.
+  if (!c) return <div className="game-slots h-9" aria-hidden="true" />;
   const recalling = state.status === "recalling";
   const pos = observePosition(state);
   const cells = Array.from({ length: c.length }, (_, i) => {
@@ -126,7 +124,7 @@ export function SequenceSlots({ state }: { state: GameState }) {
   return (
     <ol
       aria-label={recalling ? `Your answer, ${filled} of ${c.length} placed` : `Sequence of ${c.length} positions`}
-      className="grid w-full max-w-[26rem] justify-center gap-1"
+      className="game-slots grid h-9 w-full max-w-[26rem] content-center justify-center gap-1"
       style={{ gridTemplateColumns: `repeat(${c.length}, minmax(0, 2.25rem))` }}
     >
       {cells.map((cell, i) => (

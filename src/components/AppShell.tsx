@@ -5,37 +5,43 @@ import { usePathname } from "next/navigation";
 import { Wordmark } from "./Wordmark";
 
 const NAV = [
-  { href: "/", label: "Dashboard" },
   { href: "/leaderboard", label: "Leaderboard" },
-  { href: "/stats", label: "Statistics" },
+  { href: "/stats", label: "Stats" },
+  { href: "/help", label: "Help" },
   { href: "/settings", label: "Settings" },
 ];
 
-export function SiteHeader() {
+export function NavLinks({ items = NAV }: { items?: { href: string; label: string }[] }) {
   const pathname = usePathname();
   return (
-    <header className="mx-auto w-full max-w-[76rem] px-4 sm:px-8">
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 py-4">
+    <ul className="flex flex-wrap items-center gap-x-0.5 text-small">
+      {items.map((item) => {
+        const active = pathname.startsWith(item.href);
+        return (
+          <li key={item.href}>
+            <Link
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              className={`inline-flex min-h-11 items-center px-2 ${
+                active ? "font-semibold text-ink underline decoration-1 underline-offset-[0.45em]" : "text-ink-2 hover:text-ink"
+              }`}
+            >
+              {item.label}
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+export function SiteHeader() {
+  return (
+    <header className="mx-auto w-full max-w-[64rem] px-4 sm:px-8">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 py-2">
         <Wordmark />
-        <nav aria-label="Main">
-          <ul className="flex flex-wrap items-center gap-x-1 text-small">
-            {NAV.map((item) => {
-              const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    aria-current={active ? "page" : undefined}
-                    className={`inline-flex min-h-11 items-center px-2.5 ${
-                      active ? "font-semibold text-ink underline decoration-1 underline-offset-[0.45em]" : "text-ink-2 hover:text-ink"
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+        <nav aria-label="Main" className="-mr-2">
+          <NavLinks />
         </nav>
       </div>
       <div className="h-px bg-ink" />
@@ -43,38 +49,32 @@ export function SiteHeader() {
   );
 }
 
-export function SiteFooter() {
-  return (
-    <footer className="mx-auto mt-24 w-full max-w-[76rem] px-4 pb-10 sm:px-8">
-      <div className="rule-top flex flex-wrap justify-between gap-4 pt-5 text-small text-ink-2">
-        <p>Synapse Stream is a focus-training game. It is not a medical, diagnostic or therapeutic tool.</p>
-        <p className="num">No accounts. No tracking. Records stay on this device.</p>
-      </div>
-    </footer>
-  );
-}
-
-/** Standard page frame: header, a single main landmark, footer. */
+/** Frame for secondary pages: header, a single main landmark. */
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <SiteHeader />
-      <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[76rem] px-4 outline-none sm:px-8">
+      <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[64rem] px-4 pb-20 outline-none sm:px-8">
         {children}
       </main>
-      <SiteFooter />
     </>
   );
 }
 
-/** Mono section label with an editorial index, for example "02 / Daily challenge". */
-export function SectionLabel({ index, children, id }: { index: string; children: React.ReactNode; id?: string }) {
+/** Page heading for secondary pages: one step below the launch display size. */
+export function PageTitle({ eyebrow, children }: { eyebrow?: string; children: React.ReactNode }) {
   return (
-    <h2 id={id} className="label flex items-baseline gap-3 !text-ink">
-      <span aria-hidden="true" className="text-ink-2">
-        {index}
-      </span>
-      <span>{children}</span>
+    <div className="pt-8 sm:pt-12">
+      {eyebrow ? <p className="label">{eyebrow}</p> : null}
+      <h1 className="mt-2 text-headline font-semibold">{children}</h1>
+    </div>
+  );
+}
+
+export function SectionLabel({ children, id }: { children: React.ReactNode; id?: string }) {
+  return (
+    <h2 id={id} className="label !text-ink">
+      {children}
     </h2>
   );
 }

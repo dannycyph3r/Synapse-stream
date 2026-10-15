@@ -10,7 +10,7 @@ import {
   wrongFor,
 } from "./helpers";
 
-const PAGES = ["/", "/leaderboard", "/stats", "/settings", "/play?mode=practice", "/play?mode=daily"];
+const PAGES = ["/", "/help", "/leaderboard", "/stats", "/settings", "/play?mode=practice", "/play?mode=daily"];
 
 for (const scheme of ["light", "dark"] as const) {
   test(`every page passes axe in ${scheme} mode`, async ({ page }) => {
@@ -36,8 +36,8 @@ for (const scheme of ["light", "dark"] as const) {
     await page.getByRole("button", { name: "Resume" }).click();
     await enter(page, [wrongFor(practiceSequence(0)[2]!)]);
     await submit(page);
-    await page.getByText("Review the final sequence").click();
-    await expectNoAxeViolations(page, "results");
+    await expect(page.getByTestId("pattern-comparison")).toBeVisible();
+    await expectNoAxeViolations(page, "failure results");
   });
 }
 
@@ -63,24 +63,64 @@ test.describe("narrow screens and zoom", () => {
   });
 });
 
-test.describe("phone", () => {
-  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+const VIEWPORTS = [
+  { name: "narrow phone", width: 320, height: 568 },
+  { name: "standard phone", width: 390, height: 844 },
+  { name: "phone landscape", width: 844, height: 390 },
+  { name: "tablet", width: 768, height: 1024 },
+];
 
-  test("the whole recall layout fits the screen with large touch targets", async ({ page }) => {
-    await startPractice(page);
-    await waitForRecall(page);
-    await expectNoHorizontalOverflow(page);
-    const fits = await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1);
-    expect(fits).toBe(true);
-    const boxes = await page.locator(".token-key").evaluateAll((els) =>
-      els.map((e) => e.getBoundingClientRect()).map((r) => Math.min(r.width, r.height)),
-    );
-    expect(boxes).toHaveLength(8);
-    for (const size of boxes) expect(size).toBeGreaterThanOrEqual(44);
-    await page.locator(".token-key").first().tap();
-    await expect(page.getByRole("list", { name: "Your answer, 1 of 3 placed" })).toBeVisible();
+for (const vp of VIEWPORTS) {
+  test.describe(vp.name, () => {
+    test.use({ viewport: { width: vp.width, height: vp.height }, hasTouch: true });
+
+    test("recall fits the screen with no scrolling and large touch targets", async ({ page }) => {
+      await startPractice(page);
+      await waitForRecall(page);
+      await expectNoHorizontalOverflow(page, "recall");
+      const { scrollH, innerH, stageBottom } = await page.evaluate(() => ({
+        scrollH: document.documentElement.scrollHeight,
+        innerH: window.innerHeight,
+        stageBottom: document.querySelector(".stage")!.getBoundingClientRect().bottom,
+      }));
+      expect(scrollH, "page height during recall").toBeLessThanOrEqual(innerH);
+      expect(stageBottom).toBeLessThanOrEqual(innerH);
+      const submitBox = await page.getByRole("button", { name: "Submit" }).boundingBox();
+      expect(submitBox!.y + submitBox!.height).toBeLessThanOrEqual(innerH);
+      const sizes = await page.locator(".token-key").evaluateAll((els) =>
+        els.map((e) => e.getBoundingClientRect()).map((r) => Math.min(r.width, r.height)),
+      );
+      expect(sizes).toHaveLength(8);
+      for (const size of sizes) expect(size).toBeGreaterThanOrEqual(44);
+      await page.locator(".token-key").first().tap();
+      await expect(page.getByRole("list", { name: "Your answer, 1 of 3 placed" })).toBeVisible();
+    });
+
+    test("the launch screen puts Begin above the fold", async ({ page }) => {
+      await page.goto("/");
+      const begin = await page.getByRole("link", { name: "Begin", exact: true }).boundingBox();
+      const innerH = await page.evaluate(() => window.innerHeight);
+      expect(begin!.y + begin!.height).toBeLessThanOrEqual(innerH);
+      expect(begin!.height).toBeGreaterThanOrEqual(48);
+      await expectNoHorizontalOverflow(page, "launch");
+    });
+
+    test("a nine-token comparison fits without sideways scrolling", async ({ page }) => {
+      await startPractice(page, "&level=deep");
+      await waitForRecall(page);
+      const seq = practiceSequence(0, "deep");
+      expect(seq).toHaveLength(9);
+      await enter(page, [...seq.slice(0, 8), wrongFor(seq[8]!)]);
+      await submit(page);
+      await expect(page.getByTestId("pattern-comparison").getByRole("table")).toHaveCount(2);
+      await expectNoHorizontalOverflow(page, "comparison");
+      const right = await page.getByTestId("pattern-comparison").evaluate((el) =>
+        Math.max(...[...el.querySelectorAll("table")].map((t) => t.getBoundingClientRect().right)),
+      );
+      expect(right).toBeLessThanOrEqual(vp.width);
+    });
   });
-});
+}
 
 test("reduced motion removes animation but keeps timing", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -129,9 +169,14 @@ test("corrupt local storage never breaks the app", async ({ page }) => {
     }
   });
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /Enter the stream/ })).toBeVisible();
-  await expect(page.getByText("No runs yet.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Hold the pattern." })).toBeVisible();
+  // Records saved under the old product name are migrated to the new key.
+  expect(await page.evaluate(() => [localStorage.getItem("synapse-stream:v1"), !!localStorage.getItem("synapse:v1")])).toEqual([
+    null,
+    true,
+  ]);
   await page.goto("/stats");
+  await expect(page.getByText("No runs yet.")).toBeVisible();
   await expect(page.getByText("No records yet.")).toBeVisible();
   expect(errors).toEqual([]);
 });

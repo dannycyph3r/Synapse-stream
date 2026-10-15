@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pause, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Dialog } from "@/components/Dialog";
@@ -16,6 +16,8 @@ import { describeFei, formatFei } from "@/lib/game/scoring";
 import { tokenForKey } from "@/lib/game/tokens";
 import { replayRun } from "@/lib/game/verify";
 import { speechSupported } from "@/lib/media";
+import { selectQuote } from "@/lib/quotes";
+import { advanceQuotes, quoteCursor } from "@/lib/quoteSession";
 import { createValueStore, useValueStore } from "@/lib/valueStore";
 import { dailyKey, recordRun, type RunSummary, type StoredData } from "@/lib/storage/schema";
 import { updateData, updateSettings, useStoredData } from "@/lib/storage/store";
@@ -35,7 +37,7 @@ export function GameScreen() {
   if (!data) {
     return (
       <AppShell>
-        <p className="pt-14 text-ink-2">Preparing the session.</p>
+        <p className="pt-12 text-ink-2">Preparing the session.</p>
       </AppShell>
     );
   }
@@ -90,10 +92,25 @@ function GameController({
   });
 
   const data = useStoredData() ?? initial;
+
+  // Quotes: each run reads the session cursor once, then the n-th held
+  // challenge shows line base + n - 1. The cursor advances as lines are shown,
+  // so the next run continues where this one stopped.
+  const [autostart] = useState(() => mode === "practice" && initial.settings.rulesSeen);
+  const [runId, setRunId] = useState(0);
+  const quoteBase = useMemo(() => ({ runId, ...quoteCursor() }), [runId]);
+  const successLine = useCallback(
+    (completed: number) => (completed > 0 ? selectQuote("success", quoteBase.seed, quoteBase.success + completed - 1).text : null),
+    [quoteBase],
+  );
+
   const { state, dispatch, select, undo, clear, submit } = useGameSession(setup.config, {
     spoken: setup.division === "spoken",
     sound: data.settings.sound,
+    autostart,
+    successLine,
   });
+  if (state.runId !== runId) setRunId(state.runId);
 
   const [resultStore] = useState(() => createValueStore<RunResult | null>(null));
   const result = useValueStore(resultStore, null);
@@ -112,7 +129,7 @@ function GameController({
   // its stored answers. Its score comes from replaying them, never from storage.
   useEffect(() => {
     if (!daily) return;
-    const out: { value: Omit<RunResult, "review"> | null } = { value: null };
+    const out: { value: Omit<RunResult, "failure" | "quote"> | null } = { value: null };
     updateData((d) => {
       const entry = d.daily[key];
       if (!entry || entry.status !== "in-progress") return d;
@@ -131,7 +148,7 @@ function GameController({
       out.value = { summary, previousBestMs: rec.previousBestMs, isPersonalBest: rec.isPersonalBest };
       return rec.data;
     });
-    if (out.value) resultStore.set({ ...out.value, review: null });
+    if (out.value) resultStore.set({ ...out.value, failure: null, quote: null });
   }, [daily, key, setup.config, resultStore]);
 
   // Ranked progress is written as the run happens, so leaving cannot reset it.
@@ -184,19 +201,29 @@ function GameController({
       rec.value = recordRun(d, summary);
       return rec.value.data;
     });
-    const last = state.history.at(-1);
-    const review =
-      state.config?.mode.kind === "practice" && state.endReason === "mismatch" && state.challenge && last
-        ? { sequence: state.challenge.sequence, answer: last.answer }
-        : null;
+    // The comparison comes from the engine's failure record, never from UI state.
+    const failure = state.endReason === "mismatch" ? state.failure : null;
+    let quote = null;
+    if (failure) {
+      const cursor = quoteCursor();
+      quote = selectQuote("failure", cursor.seed, cursor.failure);
+      advanceQuotes("failure");
+    }
     const r = rec.value;
     resultStore.set({
       summary,
       previousBestMs: r?.previousBestMs ?? null,
       isPersonalBest: r?.isPersonalBest ?? false,
-      review,
+      failure,
+      quote,
     });
   }, [state, resultStore]);
+
+  // One success line per held challenge.
+  const feedbackEpoch = state.status === "feedback" ? state.epoch : null;
+  useEffect(() => {
+    if (feedbackEpoch !== null) advanceQuotes("success");
+  }, [feedbackEpoch]);
 
   // Focus follows the phase: keypad for recall, stage otherwise.
   const status = state.status;
@@ -294,7 +321,6 @@ function GameController({
         <PrepareScreen
           ref={headingRef}
           config={state.config ?? setup.config}
-          rulesSeen={data.settings.rulesSeen}
           spokenUnavailable={setup.spokenUnavailable}
           onBegin={begin}
         />
@@ -303,56 +329,41 @@ function GameController({
   }
 
   const c = state.challenge;
-  const shown = c ?? difficultyFor(state.config.rules, state.config.offset + state.completed);
-  const phaseText =
-    state.status === "countdown"
-      ? "Get ready"
-      : state.status === "observing"
-        ? setup.division === "spoken"
-          ? "Listen to the stream"
-          : "Watch the stream"
-        : state.status === "recalling"
-          ? "Rebuild it in order"
-          : state.status === "feedback"
-            ? "Held. The next stream follows"
-            : "Paused";
+  // During the feedback beat the strip already shows the coming round.
+  const upcoming = state.status === "feedback" || !c;
+  const shown = upcoming ? difficultyFor(state.config.rules, state.config.offset + state.completed) : c;
+  const roundQuote = state.status === "feedback" ? successLine(state.completed) : null;
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="mx-auto flex w-full max-w-[34rem] items-center justify-between gap-2 px-4 pt-3">
+    <div className="game-root">
+      <header className="mx-auto flex w-full max-w-[34rem] items-center justify-between gap-2 px-4 pt-1 [@media(orientation:landscape)_and_(max-height:540px)]:max-w-[52rem]">
         <div className="flex min-w-0 items-center gap-2">
-          <Mark className="size-6 shrink-0" />
+          <Mark className="size-5 shrink-0" />
           <p className="label truncate">{modeTitle(state.config.mode)}</p>
         </div>
-        <div className="flex shrink-0 gap-1">
-          <button type="button" className="btn btn-quiet min-h-11 px-3" onClick={() => dispatch({ type: "pause" })} aria-keyshortcuts="Escape">
+        <div className="-mr-2 flex shrink-0">
+          <button type="button" className="btn btn-quiet min-h-11 px-2.5" onClick={() => dispatch({ type: "pause" })} aria-keyshortcuts="Escape">
             <Pause aria-hidden="true" className="size-4" />
             Pause
           </button>
-          <button type="button" className="btn btn-quiet min-h-11 px-3" onClick={requestExit}>
+          <button type="button" className="btn btn-quiet min-h-11 px-2.5" onClick={requestExit}>
             <X aria-hidden="true" className="size-4" />
             Exit
           </button>
         </div>
       </header>
 
-      <main id="main" tabIndex={-1} className="mx-auto flex w-full max-w-[34rem] flex-1 flex-col items-center gap-3 px-4 pb-4 pt-2 outline-none">
+      <main id="main" tabIndex={-1} className="game-main outline-none">
         <h1 className="sr-only">
           {modeTitle(state.config.mode)}. {c ? `Challenge ${c.index + 1}` : "Starting"}
         </h1>
-        <div className="w-full">
-          <FocusMetrics
-            challenge={c ? c.index + 1 : 1}
-            length={shown.length}
-            durationMs={shown.durationMs}
-            streak={state.streak}
-            feiMs={state.feiMs}
-          />
-        </div>
-        <p className="label self-start !text-ink" aria-hidden="true">
-          {phaseText}
-        </p>
-        <SequenceDisplay ref={stageRef} state={state} spoken={setup.division === "spoken"} />
+        <FocusMetrics
+          challenge={upcoming ? state.completed + 1 : c.index + 1}
+          length={shown.length}
+          durationMs={shown.durationMs}
+          feiMs={state.feiMs}
+        />
+        <SequenceDisplay ref={stageRef} state={state} spoken={setup.division === "spoken"} quote={roundQuote} />
         <SequenceSlots state={state} />
         <TokenInput
           ref={firstKeyRef}
@@ -435,12 +446,12 @@ function DailyComplete({
   const resetIn = formatCountdown(msUntilNextUtcDay(new Date()));
   return (
     <AppShell>
-      <div className="pt-10 sm:pt-14">
+      <div className="pt-8 sm:pt-12">
         <p className="label">{modeTitle({ kind: "daily", dateKey, division })}</p>
-        <h1 ref={headingRef} tabIndex={-1} className="mt-3 text-display font-semibold outline-none">
+        <h1 ref={headingRef} tabIndex={-1} className="mt-2 text-headline font-semibold outline-none">
           Today&apos;s run is in.
         </h1>
-        <dl className="mt-8 flex flex-wrap gap-x-12 gap-y-4 border-y border-ink py-5">
+        <dl className="mt-6 flex flex-wrap gap-x-10 gap-y-4 border-y border-ink py-4">
           <div>
             <dt className="label">Focus Endurance Index</dt>
             <dd className="num mt-1 text-metric">
@@ -458,17 +469,17 @@ function DailyComplete({
           </div>
         </dl>
         <p className="mt-4 text-ink-2">
-          One ranked run per day. The next daily challenge opens in <span className="num text-ink">{resetIn}</span> (00:00 UTC).
+          The next daily challenge opens in <span className="num whitespace-nowrap text-ink">{resetIn}</span> (00:00 UTC).
         </p>
-        <div className="mt-8 flex flex-wrap gap-2">
-          <Link href="/play?mode=practice" className="btn btn-primary">
-            Practice now
+        <div className="mt-6 grid gap-2 sm:flex">
+          <Link href="/play?mode=practice" className="btn btn-primary sm:min-w-44">
+            Practice
           </Link>
           <Link href={`/leaderboard?division=${division}`} className="btn btn-secondary">
             Leaderboard
           </Link>
         </div>
-        <div className="mt-12">
+        <div className="mt-10">
           <PostScore dateKey={dateKey} division={division} />
         </div>
       </div>

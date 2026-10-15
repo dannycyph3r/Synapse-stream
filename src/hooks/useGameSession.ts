@@ -16,21 +16,27 @@ import {
 } from "@/lib/game/engine";
 import { difficultyFor } from "@/lib/game/rules";
 import { describeFei, formatDuration } from "@/lib/game/scoring";
+import { mismatchSentence } from "@/lib/game/feedback";
 import { tokenLabel, type TokenId } from "@/lib/game/tokens";
 import { cancelSpeech, playCue, speak } from "@/lib/media";
 
 interface Options {
   spoken: boolean;
   sound: boolean;
+  /** Skip the start screen and go straight to the countdown. */
+  autostart?: boolean;
+  /** The line shown after the n-th held challenge of this run (1-based). */
+  successLine?: (completed: number) => string | null;
 }
+
 
 function challengeIntro(n: number, length: number, durationMs: number): string {
   return `Challenge ${n}. ${length} tokens, ${formatDuration(durationMs).replace(" s", " seconds")} each.`;
 }
 
-export function useGameSession(initialConfig: RunConfig, { spoken, sound }: Options) {
+export function useGameSession(initialConfig: RunConfig, { spoken, sound, autostart = false, successLine }: Options) {
   const [state, dispatch] = useReducer(gameReducer, initialConfig, (config) =>
-    gameReducer(initialGameState, { type: "start", config }),
+    gameReducer(initialGameState, { type: "start", config, skipPrepare: autostart }),
   );
 
   // Timers: one per phase. The tick carries the epoch it was scheduled for,
@@ -64,7 +70,15 @@ export function useGameSession(initialConfig: RunConfig, { spoken, sound }: Opti
   useEffect(() => {
     const before = prev.current;
     prev.current = state;
-    if (!before || before.epoch === state.epoch) return;
+    if (!before) {
+      // A run that opens straight into its countdown still announces itself.
+      if (state.status === "countdown" && state.config) {
+        const d = difficultyFor(state.config.rules, state.config.offset);
+        announce(`Get ready. ${challengeIntro(1, d.length, d.durationMs)}`);
+      }
+      return;
+    }
+    if (before.epoch === state.epoch) return;
     const c = state.challenge;
 
     if (state.status === "countdown" && before.status !== "countdown" && state.config) {
@@ -89,8 +103,10 @@ export function useGameSession(initialConfig: RunConfig, { spoken, sound }: Opti
       // The next challenge is announced here, before any token speech starts,
       // so an announcement and a spoken token never talk over each other.
       const d = difficultyFor(state.config.rules, state.config.offset + state.completed);
+      const quote = successLine?.(state.completed);
       announce(
-        `Correct. Plus ${describeFei(state.lastContributionMs)}. Focus index ${describeFei(state.feiMs)}. ` +
+        `Correct. Plus ${describeFei(state.lastContributionMs)}. Total ${describeFei(state.feiMs)}. ` +
+          (quote ? `${quote} ` : "") +
           `Next: ${challengeIntro(c.index + 2, d.length, d.durationMs)}`,
       );
     }
@@ -98,15 +114,15 @@ export function useGameSession(initialConfig: RunConfig, { spoken, sound }: Opti
     if (state.status === "ended" && before.status !== "ended") {
       if (sound) playCue("end");
       announce(
-        state.endReason === "mismatch"
-          ? "The sequence did not match. Run complete."
+        state.endReason === "mismatch" && state.failure
+          ? `${mismatchSentence(state.failure.mismatches)} Run complete. Your pattern and the correct pattern are shown.`
           : "Run ended.",
         "assertive",
       );
     }
 
     if (state.status === "paused" && before.status !== "paused") announce("Paused.");
-  }, [state, spoken, sound]);
+  }, [state, spoken, sound, successLine]);
 
   const select = useCallback(
     (token: TokenId) => {

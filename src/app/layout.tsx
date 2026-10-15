@@ -7,14 +7,15 @@ import { PreferenceSync } from "@/components/PreferenceSync";
 import { PREFERENCES_BOOTSTRAP } from "@/lib/storage/bootstrap";
 
 export const metadata: Metadata = {
-  title: { default: "Synapse Stream", template: "%s · Synapse Stream" },
-  description: "Enter the stream. Hold the pattern. A minimalist sequence-memory focus game.",
-  applicationName: "Synapse Stream",
+  title: { default: "SYNAPSE", template: "%s · SYNAPSE" },
+  description: "Hold the pattern. A minimal sequence-memory focus game.",
+  applicationName: "SYNAPSE",
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f5f3ee" },
     { media: "(prefers-color-scheme: dark)", color: "#0f0f0e" },

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { RotateCcw } from "lucide-react";
+import { PageTitle } from "./AppShell";
 import { formatCountdown, msUntilNextUtcDay, utcDateKey } from "@/lib/game/daily";
 import { isDivision, type Division } from "@/lib/game/rules";
 import { describeFei, formatFei } from "@/lib/game/scoring";
@@ -111,11 +112,10 @@ export function Leaderboard() {
   const pinned = snap?.player && !snap.entries.some((e) => e.isPlayer) ? snap.player : null;
 
   return (
-    <div className="pt-12 sm:pt-16">
-      <p className="label">Rankings</p>
-      <h1 className="mt-3 text-display font-semibold">Leaderboard</h1>
+    <div>
+      <PageTitle eyebrow="Rankings">Leaderboard</PageTitle>
 
-      <div className="mt-10 flex flex-wrap items-end justify-between gap-4 border-t border-ink pt-5">
+      <div className="mt-8 flex flex-wrap items-end justify-between gap-4 border-t border-ink pt-5">
         <p className="text-ink-2">
           {period === "daily" ? (
             <>
@@ -156,7 +156,7 @@ export function Leaderboard() {
         <p role="note" className="mt-6 border-l-2 border-signal pl-4">
           <strong className="font-semibold">Preview leaderboard.</strong>{" "}
           <span className="text-ink-2">
-            {snap.backend.label} Rankings here are not global. See the README to connect a shared backend.
+            {snap.backend.label} Rankings here are not global.
           </span>
         </p>
       ) : null}
@@ -217,15 +217,11 @@ export function Leaderboard() {
         ) : null}
       </div>
 
-      <section aria-labelledby="ranking-rules" className="mt-12 max-w-[42rem]">
-        <h2 id="ranking-rules" className="label !text-ink">How ranking works</h2>
-        <p className="mt-2 text-ink-2">
-          Only daily challenge runs are ranked, one per player per division per day. Your browser sends the answers you
-          entered, never a score: the server regenerates today&apos;s sequences, replays your answers and computes the FEI
-          itself. Ties are broken by challenges completed, then by who posted first. Spoken and visual runs use different
-          timing floors, so they are ranked separately.
-        </p>
-      </section>
+      <p className="mt-10 text-small text-ink-2">
+        <Link href="/help#ranking" className="link">
+          How ranking works
+        </Link>
+      </p>
     </div>
   );
 }

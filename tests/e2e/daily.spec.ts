@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { utcDateKey } from "../../src/lib/game/daily";
-import { bankedFei, dailySequence, enter, submit, waitForRecall, wrongFor } from "./helpers";
+import { bankedFei, comparisonRow, dailySequence, enter, label, resultsHeading, submit, waitForRecall, wrongFor } from "./helpers";
 
 test.describe("daily challenge", () => {
   test("ranked run, validated posting, leaderboard, and no replay", async ({ page }) => {
     await page.goto("/play?mode=daily");
-    await expect(page.getByText(`Daily challenge · ${utcDateKey(new Date())} UTC`)).toBeVisible();
+    await expect(page.getByText(`Daily · ${utcDateKey(new Date())} UTC`)).toBeVisible();
     await page.getByRole("button", { name: /Begin ranked run/ }).click();
     await waitForRecall(page);
     await enter(page, dailySequence(0));
@@ -16,9 +16,10 @@ test.describe("daily challenge", () => {
     await enter(page, [wrongFor(seq[0]!), ...seq.slice(1)]);
     await submit(page);
 
-    await expect(page.getByRole("heading", { name: "Run complete" })).toBeVisible();
-    // Daily runs never offer the sequence review.
-    await expect(page.getByText("Review the final sequence")).toHaveCount(0);
+    await expect(resultsHeading(page)).toHaveText("Position 1 did not match.");
+    // Ranked runs reveal the failed pattern too, after the answer is in.
+    expect(await comparisonRow(page, "Your pattern")).toEqual([wrongFor(seq[0]!), ...seq.slice(1)].map(label));
+    expect(await comparisonRow(page, "Correct pattern")).toEqual(seq.map(label));
 
     const name = page.getByRole("textbox", { name: "Name on the leaderboard" });
     await page.getByRole("button", { name: "Post score" }).click();
@@ -44,7 +45,7 @@ test.describe("daily challenge", () => {
     await expect(page.getByRole("heading", { name: "Today's run is in." })).toBeVisible();
     await expect(page.getByText("Posted to today's board.")).toBeVisible();
     await page.goto("/");
-    await expect(page.getByText("Done today:")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Daily challenge · done today" })).toBeVisible();
   });
 
   test("a reload mid-run records the interrupted run from its answers", async ({ page }) => {
@@ -53,9 +54,10 @@ test.describe("daily challenge", () => {
     await waitForRecall(page);
     await enter(page, dailySequence(0));
     await submit(page);
-    await expect(page.locator("dl").filter({ hasText: "Challenge" }).locator("dd").first()).toHaveText("02", { timeout: 10_000 });
+    await expect(page.locator(".game-metrics dd").first()).toHaveText("02", { timeout: 10_000 });
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Run complete" })).toBeVisible();
+    await expect(resultsHeading(page)).toHaveText("Run recorded");
+    await expect(page.getByTestId("pattern-comparison")).toHaveCount(0);
     await expect(page.getByText(/interrupted by a reload/)).toBeVisible();
     await expect(page.getByText("00:04.5").first()).toBeVisible();
     // It cannot be restarted.
@@ -74,7 +76,7 @@ test.describe("daily challenge", () => {
     await expect(page.getByRole("dialog", { name: "Paused" })).toBeVisible();
     await page.getByRole("button", { name: "End run" }).click();
     await page.getByRole("dialog", { name: "End today's ranked run?" }).getByRole("button", { name: "End run" }).click();
-    await expect(page.getByText("You ended the run.")).toBeVisible();
+    await expect(resultsHeading(page)).toHaveText("Run ended");
   });
 });
 

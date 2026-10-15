@@ -11,8 +11,8 @@ import { TOKENS, type TokenId } from "../../src/lib/game/tokens";
  */
 export const SEED = "E2E";
 
-export function practiceSequence(index: number): readonly TokenId[] {
-  return buildChallenge(practiceConfig("standard", "foundation", "unused", SEED), index).sequence;
+export function practiceSequence(index: number, level: "foundation" | "extended" | "deep" = "foundation"): readonly TokenId[] {
+  return buildChallenge(practiceConfig("standard", level, "unused", SEED), index).sequence;
 }
 
 export function dailySequence(index: number, division: "standard" | "spoken" = "standard"): readonly TokenId[] {
@@ -48,13 +48,42 @@ export async function submit(page: Page) {
   await page.getByRole("button", { name: "Submit" }).click();
 }
 
+/** The visible FEI figure in the instrument strip. */
 export function bankedFei(page: Page) {
-  return page.locator("dl").filter({ hasText: "Banked FEI" }).locator("dd").last();
+  return page.locator(".game-metrics dd").nth(3).locator('[aria-hidden="true"]');
 }
 
-export async function startPractice(page: Page) {
-  await page.goto(`/play?mode=practice&seed=${SEED}`);
-  await page.getByRole("button", { name: /Begin session/ }).click();
+export function roundNumber(page: Page) {
+  return page.locator(".game-metrics dd").first();
+}
+
+/** A fresh browser context has never seen the rules, so the start screen shows once. */
+export async function startPractice(page: Page, query = "") {
+  await page.goto(`/play?mode=practice&seed=${SEED}${query}`);
+  await page.getByRole("button", { name: "Begin", exact: true }).click();
+}
+
+export function resultsHeading(page: Page) {
+  return page.getByRole("heading", { level: 1 });
+}
+
+/** Reads one row of the comparison tables as token names, in position order. */
+export async function comparisonRow(page: Page, row: "Your pattern" | "Correct pattern"): Promise<string[]> {
+  const rows = page.getByTestId("pattern-comparison").getByRole("row", { name: new RegExp(`^${row}`) });
+  const names: string[] = [];
+  for (let i = 0; i < (await rows.count()); i++) {
+    const cells = rows.nth(i).getByRole("cell");
+    for (let j = 0; j < (await cells.count()); j++) names.push((await cells.nth(j).innerText()).trim());
+  }
+  return names;
+}
+
+export async function failRound(page: Page, expected: readonly TokenId[], position = 1) {
+  const answer = [...expected];
+  answer[position - 1] = wrongFor(expected[position - 1]!);
+  await enter(page, answer);
+  await submit(page);
+  return answer;
 }
 
 export async function expectNoAxeViolations(page: Page, context = "") {

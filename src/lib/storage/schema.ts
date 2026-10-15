@@ -9,7 +9,9 @@ import { z } from "zod";
 import { categoryOf, type EndReason, type RunMode } from "@/lib/game/engine";
 import { isTokenId, type TokenId } from "@/lib/game/tokens";
 
-export const STORAGE_KEY = "synapse-stream:v1";
+export const STORAGE_KEY = "synapse:v1";
+/** Key used before the product was renamed; read once and migrated. */
+export const LEGACY_STORAGE_KEY = "synapse-stream:v1";
 export const RECENT_LIMIT = 12;
 /** Daily progress older than this is pruned on load. */
 export const DAILY_RETENTION_DAYS = 21;

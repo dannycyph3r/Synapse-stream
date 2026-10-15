@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { SectionLabel } from "./AppShell";
+import { PageTitle, SectionLabel } from "./AppShell";
 import { announce } from "./Announcer";
 import { PRACTICE_LEVELS, STANDARD_RULES, difficultyFor } from "@/lib/game/rules";
 import { formatDuration } from "@/lib/game/scoring";
@@ -130,7 +130,7 @@ function NameField({ initial }: { initial: string }) {
           Leaderboard name
         </label>
         <p id={`${id}-h`} className="pt-1 text-small text-ink-2">
-          Used when you post a daily score. Optional; you can also enter it when posting.
+          Shown when you post a daily score.
         </p>
       </div>
       <div className="md:col-span-8">
@@ -176,13 +176,12 @@ export function SettingsPanel() {
   const s = data.settings;
 
   return (
-    <div className="pt-12 sm:pt-16">
-      <p className="label">Preferences</p>
-      <h1 className="mt-3 text-display font-semibold">Settings</h1>
-      <p className="mt-6 max-w-[40rem] text-ink-2">Changes save as you make them and stay in this browser.</p>
+    <div>
+      <PageTitle eyebrow="Preferences">Settings</PageTitle>
+      <p className="mt-3 max-w-[40rem] text-ink-2">Changes save as you make them and stay in this browser.</p>
 
-      <section aria-labelledby="play-heading" className="mt-12 border-t border-ink pt-5">
-        <SectionLabel index="01" id="play-heading">
+      <section aria-labelledby="play-heading" className="mt-10 border-t border-ink pt-5">
+        <SectionLabel id="play-heading">
           Play
         </SectionLabel>
         <div className="mt-4">
@@ -193,9 +192,8 @@ export function SettingsPanel() {
             onChange={(v) => save({ presentation: v })}
             description={
               <>
-                Spoken mode says each token aloud as it appears, for players who cannot rely on sight. Its fastest pace is 1.0 s
-                instead of 0.6 s, so it is ranked in its own division.
-                {canSpeak === false ? " This browser cannot synthesise speech, so spoken mode is unavailable here." : ""}
+                Spoken says each token aloud. It is ranked in its own division.
+                {canSpeak === false ? " This browser cannot speak, so it is unavailable here." : ""}
               </>
             }
             options={[
@@ -208,23 +206,23 @@ export function SettingsPanel() {
             name="practiceLevel"
             value={s.practiceLevel}
             onChange={(v) => save({ practiceLevel: v })}
-            description="Where practice runs start on the schedule. The daily challenge always starts at the beginning."
+            description="Where practice runs start. The daily challenge always starts at the beginning."
             options={PRACTICE_LEVELS.map((l) => {
               const d = difficultyFor(STANDARD_RULES, l.offset);
               return { value: l.id, label: l.label, hint: `${d.length} tokens at ${formatDuration(d.durationMs)}` };
             })}
           />
           <Switch
-            label="Rules before each run"
-            description="Show the full rules on the start screen. When off, they sit behind a disclosure."
+            label="Start screen before practice"
+            description="Show a short prompt before each practice run. When off, Begin goes straight to the countdown."
             checked={!s.rulesSeen}
             onChange={(on) => save({ rulesSeen: !on })}
           />
         </div>
       </section>
 
-      <section aria-labelledby="display-heading" className="mt-12 border-t border-ink pt-5">
-        <SectionLabel index="02" id="display-heading">
+      <section aria-labelledby="display-heading" className="mt-10 border-t border-ink pt-5">
+        <SectionLabel id="display-heading">
           Display and sound
         </SectionLabel>
         <div className="mt-4">
@@ -244,7 +242,7 @@ export function SettingsPanel() {
             name="motion"
             value={s.motion}
             onChange={(v) => save({ motion: v })}
-            description="Reduced motion removes fades and the dissolve. Tokens still appear for the same time."
+            description="Reduce removes fades. Token timing never changes."
             options={[
               { value: "system", label: "System", hint: "Follow the device" },
               { value: "reduce", label: "Reduce", hint: "No transitions" },
@@ -253,15 +251,15 @@ export function SettingsPanel() {
           />
           <Switch
             label="Sound"
-            description="A quiet, identical tick per token and a short tone for a correct answer. It never reveals which token is showing."
+            description="A quiet tick per token and a tone for a correct answer. Off by default."
             checked={s.sound}
             onChange={(on) => save({ sound: on })}
           />
         </div>
       </section>
 
-      <section aria-labelledby="account-heading" className="mt-12 border-t border-ink pt-5">
-        <SectionLabel index="03" id="account-heading">
+      <section aria-labelledby="account-heading" className="mt-10 border-t border-ink pt-5">
+        <SectionLabel id="account-heading">
           Leaderboard
         </SectionLabel>
         <div className="mt-4">

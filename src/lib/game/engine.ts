@@ -28,7 +28,7 @@ import {
   type Ruleset,
 } from "./rules";
 import { challengeContributionMs } from "./scoring";
-import { generateSequence, sequencesMatch } from "./sequence";
+import { generateSequence, reviewPositions, sequencesMatch } from "./sequence";
 import type { TokenId } from "./tokens";
 
 export const COUNTDOWN_FROM = 3;
@@ -37,7 +37,8 @@ export const COUNTDOWN_STEP_MS = 800;
 export const GAP_MS = 300;
 /** Dissolve after the last token, before recall opens. */
 export const DISSOLVE_MS = 450;
-export const FEEDBACK_MS = 1100;
+/** Long enough to read a short line after a correct round; it never affects score. */
+export const FEEDBACK_MS = 1600;
 
 export type RunMode =
   | { kind: "daily"; dateKey: string; division: Division }
@@ -109,6 +110,22 @@ export interface ChallengeRecord {
   contributionMs: number;
 }
 
+/**
+ * The challenge that ended a run, kept exactly as it was played. The results
+ * screen reads this record; it never rebuilds the comparison from UI state.
+ * It exists only after a submission, so nothing about the correct pattern is
+ * available before the player has answered.
+ */
+export interface FailureRecord {
+  index: number;
+  length: number;
+  durationMs: number;
+  expected: readonly TokenId[];
+  answer: readonly TokenId[];
+  /** 1-based positions where the answer differed. */
+  mismatches: number[];
+}
+
 export type Status =
   | "idle"
   | "prepare"
@@ -141,6 +158,7 @@ export interface GameState {
   maxLengthCompleted: number;
   lastContributionMs: number;
   endReason: EndReason | null;
+  failure: FailureRecord | null;
 }
 
 export const initialGameState: GameState = {
@@ -161,6 +179,7 @@ export const initialGameState: GameState = {
   maxLengthCompleted: 0,
   lastContributionMs: 0,
   endReason: null,
+  failure: null,
 };
 
 export type GameAction =
@@ -270,7 +289,18 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       };
       const history = [...state.history, record];
       if (!correct) {
-        return next(state, { status: "ended", endReason: "mismatch", history, lastContributionMs: 0 });
+        // Score, completed count and difficulty are left exactly as they were.
+        const failure: FailureRecord = {
+          index: c.index,
+          length: c.length,
+          durationMs: c.durationMs,
+          expected: c.sequence,
+          answer: state.answer,
+          mismatches: reviewPositions(c.sequence, state.answer)
+            .filter((p) => !p.correct)
+            .map((p) => p.position),
+        };
+        return next(state, { status: "ended", endReason: "mismatch", history, lastContributionMs: 0, failure });
       }
       const streak = state.streak + 1;
       return next(state, {
