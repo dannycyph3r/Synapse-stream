@@ -1,4 +1,4 @@
--- Synapse Stream daily leaderboard.
+-- SYNAPSE daily leaderboard.
 --
 -- Scores are written only by the server (service role) after it has replayed
 -- and verified a run. Browsers never write to this table directly.
