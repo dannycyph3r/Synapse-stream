@@ -43,13 +43,17 @@ function sameSlot(a: ScoreRecord, b: ScoreRecord): boolean {
   return a.dateKey === b.dateKey && a.division === b.division && a.playerId === b.playerId;
 }
 
-export function createMemoryStore(): ScoreStore {
+export const MEMORY_LABEL = "Preview server. Scores live in this server's memory and reset when it restarts.";
+export const SERVERLESS_LABEL =
+  "Preview deployment. Scores are held in temporary server memory, so they can reset at any time and may differ between visits.";
+
+export function createMemoryStore(label: string = MEMORY_LABEL): ScoreStore {
   const records: ScoreRecord[] = [];
   return {
     info: {
       kind: "preview-memory",
       isPreview: true,
-      label: "Preview server. Scores live in this server's memory and reset when it restarts.",
+      label,
     },
     async insert(record) {
       if (records.some((r) => sameSlot(r, record))) return "duplicate";
@@ -122,17 +126,44 @@ export function createFileStore(file: string): ScoreStore {
   };
 }
 
+export type StoreKind = "supabase" | "memory" | "serverless-memory" | "file";
+
+/**
+ * Which store to use, from the environment alone.
+ *
+ * Serverless hosts such as Vercel have a read-only, per-instance filesystem,
+ * so the file store cannot work there. Without Supabase credentials a Vercel
+ * deployment falls back to memory, labelled as temporary.
+ */
+export function selectStoreKind(env: Record<string, string | undefined>): StoreKind {
+  if (env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY) return "supabase";
+  if (env.LEADERBOARD_STORE === "memory") return "memory";
+  if (env.LEADERBOARD_STORE === "file") return "file";
+  if (env.VERCEL) return "serverless-memory";
+  return "file";
+}
+
 const globalForStore = globalThis as unknown as { __synapseStore?: ScoreStore };
 
 /** One store per server process, surviving dev-mode module reloads. */
 export function getScoreStore(): ScoreStore {
   if (globalForStore.__synapseStore) return globalForStore.__synapseStore;
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const env = process.env;
   let store: ScoreStore;
-  if (url && key) store = createSupabaseStore(url, key);
-  else if (process.env.LEADERBOARD_STORE === "memory") store = createMemoryStore();
-  else store = createFileStore(path.join(process.cwd(), ".data", "scores.json"));
+  switch (selectStoreKind(env)) {
+    case "supabase":
+      store = createSupabaseStore(env.SUPABASE_URL!, env.SUPABASE_SERVICE_ROLE_KEY!);
+      break;
+    case "memory":
+      store = createMemoryStore();
+      break;
+    case "serverless-memory":
+      store = createMemoryStore(SERVERLESS_LABEL);
+      break;
+    case "file":
+      store = createFileStore(path.join(process.cwd(), ".data", "scores.json"));
+      break;
+  }
   globalForStore.__synapseStore = store;
   return store;
 }

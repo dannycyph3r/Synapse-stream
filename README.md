@@ -53,6 +53,26 @@ The browser tests start `next start` on port 3100 with an in-memory leaderboard.
 CHROMIUM_PATH=/path/to/chrome npm run test:e2e
 ```
 
+## Deploy
+
+### GitHub
+
+The repository is ready to push as is. `.github/workflows/ci.yml` runs on every push to `main` and every pull request:
+
+1. **check:** `npm ci`, typecheck, lint, unit tests and a production build.
+2. **e2e:** installs Playwright's Chromium and runs the browser suite against the production build. Traces are uploaded when it fails.
+
+Node is pinned to 22 for CI through `.nvmrc`; `package.json` declares `>=20.9.0`, the minimum for Next.js 16.
+
+### Vercel
+
+1. In Vercel, choose **Add New → Project** and import the GitHub repository.
+2. Keep the detected defaults: framework **Next.js**, build command `npm run build`, install command `npm install`, no output directory override. No `vercel.json` is needed.
+3. Deploy. With no environment variables, the game, practice, daily challenge, statistics and settings all work fully. The leaderboard runs as a clearly labelled temporary preview.
+4. For a real shared leaderboard, run the Supabase migration below, then add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` under **Settings → Environment Variables** (Production, and Preview if wanted) and redeploy. Never expose the service role key with a `NEXT_PUBLIC_` prefix.
+
+Every push to `main` then deploys to production, and every pull request gets a preview URL.
+
 ## How a run works
 
 1. **Prepare.** A 3-2-1 countdown. The first practice run and every daily run open on a three-line start screen.
@@ -143,11 +163,12 @@ Player ids are never returned by the API. Ranking is by FEI, then challenges com
 
 | Store | When | Shared? |
 |---|---|---|
-| `file` (default) | no Supabase credentials | No. JSON at `.data/scores.json` on the machine running the app |
+| `file` (default locally) | no Supabase credentials | No. JSON at `.data/scores.json` on the machine running the app |
 | `memory` | `LEADERBOARD_STORE=memory` | No. Lost on restart; used by the browser tests |
+| `memory` (serverless) | on Vercel (`VERCEL` is set) without Supabase | No. Temporary per server instance; can reset at any time |
 | `supabase` | `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` set | Yes |
 
-The two preview stores are labelled as previews wherever the leaderboard appears. They are useful for a demo on one machine; they are not a global ranking.
+The preview stores are labelled as previews wherever the leaderboard appears. They are useful for a demo; they are not a global ranking. Vercel's filesystem is read-only and per instance, so a deployment never uses the file store.
 
 To use Supabase:
 
@@ -225,7 +246,7 @@ No accounts, analytics or third-party requests. Fonts are bundled. Records and s
 
 ## Known limitations
 
-- The leaderboard is a preview unless Supabase is configured; the Supabase adapter is untested against a live project.
+- The leaderboard is a preview unless Supabase is configured; on Vercel without Supabase it is temporary per server instance. The Supabase adapter is untested against a live project.
 - Anti-cheat limits as listed above.
 - Spoken presentation depends on the browser's speech synthesis voice; timing is tuned for typical English voices.
 - Sound is a single synthesised tick per token and a confirmation tone; there is no richer sound design.

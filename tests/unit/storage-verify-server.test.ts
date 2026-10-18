@@ -15,7 +15,7 @@ import {
 } from "@/lib/storage/schema";
 import { handleQuery, handleSubmit } from "@/lib/server/leaderboard";
 import { createRateLimiter } from "@/lib/server/rateLimit";
-import { createFileStore, createMemoryStore } from "@/lib/server/scoreStore";
+import { SERVERLESS_LABEL, createFileStore, createMemoryStore, selectStoreKind } from "@/lib/server/scoreStore";
 import { createSupabaseStore } from "@/lib/server/supabaseStore";
 
 const ID = "3f2b8c1e-6a0d-4e7b-9c55-1d2e3f4a5b6c";
@@ -279,5 +279,25 @@ describe("score stores", () => {
     expect([rl.hit("a", 0), rl.hit("a", 1), rl.hit("a", 2), rl.hit("b", 2), rl.hit("a", 1001)]).toEqual([
       true, true, false, true, true,
     ]);
+  });
+});
+
+describe("store selection", () => {
+  it("uses Supabase whenever both credentials are present", () => {
+    expect(selectStoreKind({ SUPABASE_URL: "https://x.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "k", VERCEL: "1" })).toBe("supabase");
+    expect(selectStoreKind({ SUPABASE_URL: "https://x.supabase.co" })).toBe("file");
+  });
+
+  it("never uses the file store on Vercel unless told to", () => {
+    expect(selectStoreKind({ VERCEL: "1" })).toBe("serverless-memory");
+    expect(selectStoreKind({ VERCEL: "1", LEADERBOARD_STORE: "memory" })).toBe("memory");
+    expect(selectStoreKind({})).toBe("file");
+    expect(selectStoreKind({ LEADERBOARD_STORE: "memory" })).toBe("memory");
+  });
+
+  it("labels the serverless fallback as temporary", () => {
+    const store = createMemoryStore(SERVERLESS_LABEL);
+    expect(store.info.isPreview).toBe(true);
+    expect(store.info.label).toMatch(/temporary/);
   });
 });
