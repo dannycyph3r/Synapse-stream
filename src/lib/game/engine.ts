@@ -41,7 +41,7 @@ export const DISSOLVE_MS = 450;
 export const FEEDBACK_MS = 1600;
 
 export type RunMode =
-  | { kind: "daily"; dateKey: string; division: Division }
+  | { kind: "daily"; dateKey: string; division: Division; /** 1 or 2. */ attempt: number }
   | {
       kind: "practice";
       division: Division;
@@ -58,10 +58,10 @@ export interface RunConfig {
   offset: number;
 }
 
-export function dailyConfig(dateKey: string, division: Division): RunConfig {
+export function dailyConfig(dateKey: string, division: Division, attempt = 1): RunConfig {
   return {
-    mode: { kind: "daily", dateKey, division },
-    seed: dailySeed(dateKey, division),
+    mode: { kind: "daily", dateKey, division, attempt },
+    seed: dailySeed(dateKey, division, attempt),
     rules: RULESETS[division],
     offset: 0,
   };

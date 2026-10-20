@@ -6,8 +6,11 @@ import { getScoreStore } from "@/lib/server/scoreStore";
 
 export const dynamic = "force-dynamic";
 
-/** Generous for real play (one ranked run per division per day), tight for scripts. */
-const limiter = createRateLimiter(10, 10 * 60_000);
+/**
+ * Generous for real play (two attempts per division per day, plus retries),
+ * tight for scripts. LEADERBOARD_SUBMIT_LIMIT raises it for test runs.
+ */
+const limiter = createRateLimiter(Number(process.env.LEADERBOARD_SUBMIT_LIMIT) || 10, 10 * 60_000);
 const MAX_BODY_BYTES = 32_000;
 
 export async function POST(request: NextRequest) {

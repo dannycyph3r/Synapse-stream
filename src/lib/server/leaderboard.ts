@@ -15,6 +15,7 @@ import {
   type LeaderboardSnapshot,
   type SubmitResponse,
 } from "@/lib/leaderboard/types";
+import { MAX_DAILY_ATTEMPTS } from "@/lib/game/daily";
 import type { ScoreRecord, ScoreStore } from "./scoreStore";
 
 export interface HandlerResult<T> {
@@ -31,6 +32,10 @@ const SubmitSchema = z.object({
     .transform((s) => s.trim().replace(/\s+/g, " "))
     .refine((s) => DISPLAY_NAME_PATTERN.test(s), "display name must be 2 to 20 letters, numbers, spaces, dots, dashes or underscores"),
   answers: z.array(z.array(z.string()).max(32)).min(1).max(MAX_REPLAY_CHALLENGES),
+  /** Which of the day's attempts this is (1 or 2). Older clients omit it: one attempt. */
+  attempt: z.number().int().min(1).max(MAX_DAILY_ATTEMPTS).default(1),
+  /** Which attempt's sequences the answers were played on. Defaults to `attempt`. */
+  run: z.number().int().min(1).max(MAX_DAILY_ATTEMPTS).optional(),
 });
 
 function toEntry(r: ScoreRecord, rank: number, playerId: string | null): LeaderboardEntry {
@@ -68,7 +73,12 @@ export async function handleSubmit(
   }
 
   // The score is recomputed here from the answers; nothing the client claims is trusted.
-  const replay = replayRun(dailyConfig(req.dateKey, division), req.answers);
+  // The best run so far may come from an earlier attempt than the one being counted.
+  const run = req.run ?? req.attempt;
+  if (run > req.attempt) {
+    return { status: 400, body: { status: "rejected", reason: "run cannot come from a later attempt" } };
+  }
+  const replay = replayRun(dailyConfig(req.dateKey, division, run), req.answers);
   if (!replay.valid) {
     return { status: 422, body: { status: "rejected", reason: `run did not verify: ${replay.reason}` } };
   }
@@ -82,19 +92,26 @@ export async function handleSubmit(
     completed: replay.completed,
     maxLength: replay.maxLength,
     submittedAt: deps.now.getTime(),
+    attempts: req.attempt,
   };
 
-  const outcome = await deps.store.insert(record);
+  // Keeps the better of the stored and submitted runs (best of two).
+  const { outcome, record: stored } = await deps.store.submit(record);
   const list = await deps.store.listDaily(req.dateKey, division);
-  const mine = list.find((r) => r.playerId === req.playerId) ?? null;
   const rank = rankOf(list, (r) => r.playerId === req.playerId);
-  const entry = mine && rank ? toEntry(mine, rank, req.playerId) : null;
-
-  if (outcome === "duplicate") {
-    return { status: 409, body: { status: "duplicate", entry, backend: deps.store.info } };
-  }
-  if (!entry) throw new Error("inserted record was not readable");
-  return { status: 201, body: { status: "accepted", entry, backend: deps.store.info } };
+  const mine = rank ? list[rank - 1]! : null;
+  return {
+    status: outcome === "inserted" ? 201 : 200,
+    body: {
+      status: "accepted",
+      outcome,
+      attempts: stored.attempts,
+      bestFeiMs: stored.feiMs,
+      // Null only when the player ranks below the store's read cap.
+      entry: mine && rank ? toEntry(mine, rank, req.playerId) : null,
+      backend: deps.store.info,
+    },
+  };
 }
 
 export interface QueryParams {

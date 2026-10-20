@@ -42,11 +42,25 @@ export interface SubmitRequest {
   displayName: string;
   /** The answers entered, in order. The score is never sent; the server computes it. */
   answers: string[][];
+  /** How many of the day's attempts are finished. The server keeps the better run. */
+  attempt: number;
+  /** Which attempt's sequences `answers` were played on (the best run so far). */
+  run: number;
 }
 
+export type SubmitOutcome = "inserted" | "improved" | "kept" | "unchanged";
+
 export type SubmitResponse =
-  | { status: "accepted"; entry: LeaderboardEntry; backend: BackendInfo }
-  | { status: "duplicate"; entry: LeaderboardEntry | null; backend: BackendInfo }
+  | {
+      status: "accepted";
+      outcome: SubmitOutcome;
+      /** Attempts the server has counted for today. */
+      attempts: number;
+      /** The best score now on the board for this player today. */
+      bestFeiMs: number;
+      entry: LeaderboardEntry | null;
+      backend: BackendInfo;
+    }
   | { status: "rejected"; reason: string };
 
 export const LEADERBOARD_PAGE_SIZE = 25;

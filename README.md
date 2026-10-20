@@ -113,7 +113,9 @@ The first challenge is worth 3 x 1.5 s = 4.5 s. The formula lives in one place, 
 
 ## Modes
 
-**Daily challenge.** Everyone gets the same sequences for the same UTC calendar day. One ranked attempt per division per day. The attempt counts from the moment the first sequence appears; leaving after that asks for confirmation and ends the run. Progress is written to local storage after every challenge, so a reload or closed tab finalises the run from its recorded answers rather than resetting it.
+**Daily challenge.** Everyone gets the same sequences for the same UTC calendar day. Two ranked attempts per division per day; the better one counts. The player enters a leaderboard name on the start screen before the first attempt (it is remembered), and each finished attempt posts the day's best run automatically, so nobody misses the board by skipping a form. Attempt 2 runs on its own sequences, the same for every player, so the failed-pattern reveal from attempt 1 gives nothing away. An attempt counts from the moment the first sequence appears; leaving after that asks for confirmation and ends it. Progress is written to local storage after every challenge, so a reload or closed tab finalises the attempt from its recorded answers rather than resetting it.
+
+On the launch screen the daily link carries a small globe (the board is global) that turns a couple of times on load and again on hover or focus; it shows "1 attempt left" after the first attempt and becomes a checkmark with "done for today" once both are used. Reduced motion keeps the globe still.
 
 **Practice.** Unranked, unlimited, independent random seeds, separate records per level. A shareable seed is supported: `/play?mode=practice&seed=ORBIT` replays the same sequences on any device.
 
@@ -149,19 +151,21 @@ On the launch screen, "pattern" glitches through Korean, Greek, Hindi, Japanese,
 `src/lib/game/daily.ts` and `src/lib/game/sequence.ts`
 
 - The date key is the UTC calendar day, `YYYY-MM-DD`.
-- The seed is `synapse-daily-v1:<date>:<division>`. Divisions have separate sequences so playing one reveals nothing about the other.
+- The seed is `synapse-daily-v1:<date>:<division>` for attempt 1 and `synapse-daily-v1:<date>:<division>:attempt-2` for attempt 2. Divisions and attempts have separate sequences so playing one reveals nothing about another.
 - Challenge `i` is generated from its own derived seed, `<seed>#<i>`, with a mulberry32 generator seeded by a cyrb53 string hash. Any challenge can be regenerated without generating the ones before it.
 - Tokens may repeat, but never three times in a row.
 
 ## Leaderboard
 
-The browser never submits a score. Posting a daily run sends the date, division, an anonymous device id, a display name and **the answers entered**. The server (`src/lib/server/leaderboard.ts`):
+The browser never submits a score. Posting a daily run sends the date, division, an anonymous device id, a display name, `attempt` (how many attempts the player has finished today, 1 or 2), `run` (which attempt's sequences the answers were played on) and **the answers entered**. The server (`src/lib/server/leaderboard.ts`):
 
 1. validates the payload (zod), the display name pattern and the date (today in UTC, or yesterday during the first hour of today),
-2. regenerates the day's sequences from the seed and replays the answers with the same comparison and scoring code the game uses,
+2. regenerates that attempt's sequences from the seed and replays the answers with the same comparison and scoring code the game uses,
 3. rejects runs that do not verify (wrong lengths, unknown tokens, answers after a mismatch),
-4. stores one record per player, per division, per day (a second post returns 409 with the original),
+4. keeps one record per player, per division, per day: the better of the stored run and the new one (by FEI, then challenges completed). A post whose `attempt` is not higher than the attempts already counted is a resend and changes nothing, so the client can retry freely and a third attempt is impossible,
 5. rate limits submissions per client address.
+
+The response says what happened (`inserted`, `improved`, `kept` or `unchanged`) and returns the player's best entry with its rank. If the server cannot be reached, the run stays on the device, the results screen offers "Try again", and the next visit to the daily challenge posts it automatically.
 
 Player ids are never returned by the API. Ranking is by FEI, then challenges completed, then earliest post. All-time shows each player's single best day.
 
@@ -185,10 +189,12 @@ The preview stores are labelled as previews wherever the leaderboard appears. Th
    - the dashboard: SQL Editor → paste `supabase/migrations/0001_daily_scores.sql` → Run; or
    - the Supabase CLI, from this folder: `supabase login`, `supabase link --project-ref <ref>`, then `supabase db push`.
 
-   The migration is safe to run more than once. It creates the table with a unique `(date_key, division, player_id)` constraint, enables Row Level Security, revokes every browser privilege (including `TRUNCATE`, which RLS does not cover), grants browsers read access to public columns only, and grants the server role explicitly.
+   Then run `supabase/migrations/0002_daily_attempts.sql` the same way. It adds the `attempts` column and the `submit_daily_score` function that applies the best-of-two rule in one locked transaction.
+
+   Both migrations are safe to run more than once. The first creates the table with a unique `(date_key, division, player_id)` constraint, enables Row Level Security, revokes every browser privilege (including `TRUNCATE`, which RLS does not cover), grants browsers read access to public columns only, and grants the server role explicitly.
 3. **Copy two values** from Project Settings: the **Project URL** and a **secret key** (`sb_secret_...`). A legacy `service_role` key also works, but Supabase is retiring those.
 4. **Put them in `.env.local`** as `SUPABASE_URL` and `SUPABASE_SECRET_KEY` (see `.env.example`). Optionally add the publishable key as `SUPABASE_PUBLISHABLE_KEY`.
-5. **Check the connection:** `npm run check:leaderboard`. It is read-only and reports, in plain words, whether the URL, key, table and browser permissions are right.
+5. **Check the connection:** `npm run check:leaderboard`. It reports, in plain words, whether the URL, key, table, two-attempt function and browser permissions are right. It writes nothing: the function check sends an invalid attempt number, which the database refuses.
 6. **Add the same two variables in Vercel** (Production) and redeploy. `https://<your-site>/api/leaderboard` should then report `"kind":"supabase"` and `"isPreview":false`, and the preview banner disappears.
 
 Server keys go only in the `apikey` header for new `sb_secret_` keys (they are not JWTs), and in both `apikey` and `Authorization` for legacy JWT keys. Every Supabase request times out after 8 seconds, so a paused project shows the leaderboard's "could not be reached" state instead of hanging.
@@ -208,7 +214,7 @@ These remain and are stated plainly:
 - The daily seed is public so the game can run offline and the server can verify runs. A determined player could compute the sequences ahead of time and submit a perfect run. The failed-pattern reveal also shows one daily sequence to each player who misses it. The fix is a server-paced session: a secret per-day seed (HMAC of the date), the server issuing one challenge at a time, and minimum elapsed-time checks per challenge.
 - A browser game cannot hide its current sequence from its own developer tools. The UI renders only the token on screen and nothing after the observe phase until an answer is submitted, and never puts token names in live regions in the visual division, but the data is in memory.
 - Without accounts, a player can post again under a new device id. Supabase anonymous auth tied to the record would close this.
-- The rate limiter is per server process.
+- The rate limiter is per server process. It allows 10 posts per address per 10 minutes; set `LEADERBOARD_SUBMIT_LIMIT` to change it.
 
 ## Accessibility
 
@@ -266,11 +272,11 @@ The engine is a reducer over an explicit state machine (`idle -> prepare -> coun
 
 ## Privacy
 
-No accounts, analytics or third-party requests. Fonts are bundled. Records and settings stay in local storage under `synapse:v1`; records saved under the earlier `synapse-stream:v1` key are migrated once on first load. Nothing leaves the device unless you post a daily score.
+No accounts, analytics or third-party requests. Fonts are bundled. Records and settings stay in local storage under `synapse:v1`; records saved under the earlier `synapse-stream:v1` key are migrated once on first load. Nothing leaves the device except daily challenge runs, which post automatically with the name entered on the daily start screen. Practice runs never leave the device.
 
 ## Known limitations
 
-- The leaderboard is a preview unless Supabase is configured; on Vercel without Supabase it is temporary per server instance. The Supabase path is verified against Postgres and a REST stand-in, not yet against a live project; run `npm run check:leaderboard` once connected.
+- The leaderboard is a preview unless Supabase is configured; on Vercel without Supabase it is temporary per server instance. The Supabase path is tested against Postgres and a REST stand-in in CI; `npm run check:leaderboard` confirms a live project.
 - Anti-cheat limits as listed above.
 - Spoken presentation depends on the browser's speech synthesis voice; timing is tuned for typical English voices.
 - Sound is a single synthesised tick per token and a confirmation tone; there is no richer sound design.

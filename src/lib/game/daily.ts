@@ -33,9 +33,18 @@ export function isValidDateKey(key: string): boolean {
   return utcDateKey(date) === key;
 }
 
-/** Each division has its own sequences, so playing one reveals nothing about the other. */
-export function dailySeed(dateKey: string, division: Division): string {
-  return `synapse-daily-${DAILY_SEED_VERSION}:${dateKey}:${division}`;
+/** Ranked attempts per player, per division, per day. The better one counts. */
+export const MAX_DAILY_ATTEMPTS = 2;
+
+/**
+ * Each division has its own sequences, so playing one reveals nothing about
+ * the other. Each attempt has its own sequences too, the same for every
+ * player: a second attempt never replays the pattern a failed first attempt
+ * revealed. Attempt 1 keeps the original seed, so runs already played stay valid.
+ */
+export function dailySeed(dateKey: string, division: Division, attempt = 1): string {
+  const base = `synapse-daily-${DAILY_SEED_VERSION}:${dateKey}:${division}`;
+  return attempt === 1 ? base : `${base}:attempt-${attempt}`;
 }
 
 /** Milliseconds from `now` to the next 00:00 UTC. */

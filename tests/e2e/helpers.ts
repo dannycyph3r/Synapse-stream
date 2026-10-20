@@ -15,8 +15,8 @@ export function practiceSequence(index: number, level: "foundation" | "extended"
   return buildChallenge(practiceConfig("standard", level, "unused", SEED), index).sequence;
 }
 
-export function dailySequence(index: number, division: "standard" | "spoken" = "standard"): readonly TokenId[] {
-  return buildChallenge(dailyConfig(utcDateKey(new Date()), division), index).sequence;
+export function dailySequence(index: number, division: "standard" | "spoken" = "standard", attempt = 1): readonly TokenId[] {
+  return buildChallenge(dailyConfig(utcDateKey(new Date()), division, attempt), index).sequence;
 }
 
 export function label(id: TokenId): string {

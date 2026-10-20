@@ -1,5 +1,6 @@
 import { Eye, Volume2 } from "lucide-react";
 import type { RunMode } from "@/lib/game/engine";
+import { MAX_DAILY_ATTEMPTS } from "@/lib/game/daily";
 import { practiceLevel } from "@/lib/game/rules";
 
 /**
@@ -21,7 +22,11 @@ export function ModeTag({
   // Narrow screens drop "Practice ·": the level name alone is unambiguous there.
   const text =
     mode.kind === "daily" ? (
-      `Daily · ${mode.dateKey}`
+      <>
+        Daily
+        <span className={compact ? "max-sm:hidden" : ""}> · {mode.dateKey}</span> · {mode.attempt}/{MAX_DAILY_ATTEMPTS}
+        <span className="sr-only"> attempts</span>
+      </>
     ) : (
       <>
         <span className={compact ? "max-sm:hidden" : ""}>Practice · </span>

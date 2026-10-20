@@ -6,8 +6,15 @@ type Result = { ok: boolean; label: string; detail: string };
 
 const URL_OK = "https://abcd.supabase.co";
 
-function fakeFetch(handler: (url: string, headers: Record<string, string>) => Response | Promise<Response>) {
-  return (async (url: string, init?: RequestInit) => handler(url, (init?.headers ?? {}) as Record<string, string>)) as typeof fetch;
+const RPC_INSTALLED = () => new Response('{"code":"22023","message":"attempt must be 1 or 2"}', { status: 400 });
+
+/** A fake Supabase. Calls to the two-attempt function answer as if migration 0002 is installed unless `rpc` says otherwise. */
+function fakeFetch(
+  handler: (url: string, headers: Record<string, string>) => Response | Promise<Response>,
+  rpc: () => Response = RPC_INSTALLED,
+) {
+  return (async (url: string, init?: RequestInit) =>
+    url.includes("/rpc/") ? rpc() : handler(url, (init?.headers ?? {}) as Record<string, string>)) as typeof fetch;
 }
 
 async function run(opts: Record<string, unknown>): Promise<Result[]> {
@@ -37,6 +44,16 @@ describe("check:leaderboard", () => {
     const r = await run({ url: URL_OK, key: "sb_secret_abc", fetchImpl: fakeFetch(() => new Response('{"code":"PGRST205"}', { status: 404 })) });
     expect(failed(r)).toEqual(["Table public.daily_scores exists"]);
     expect(r.at(-1)!.detail).toMatch(/0001_daily_scores\.sql/);
+  });
+
+  it("asks for migration 0002 when the two-attempt function is missing", async () => {
+    const r = await run({
+      url: URL_OK,
+      key: "sb_secret_abc",
+      fetchImpl: fakeFetch(() => Response.json([]), () => new Response('{"code":"PGRST202"}', { status: 404 })),
+    });
+    expect(failed(r)).toEqual(["Two-attempt function (migration 0002) is installed"]);
+    expect(r.find((x) => !x.ok)!.detail).toMatch(/0002_daily_attempts\.sql/);
   });
 
   it("explains a rejected key, a publishable key and a dashboard URL", async () => {

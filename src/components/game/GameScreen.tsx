@@ -18,10 +18,24 @@ import { speechSupported } from "@/lib/media";
 import { selectQuote } from "@/lib/quotes";
 import { advanceQuotes, quoteCursor } from "@/lib/quoteSession";
 import { createValueStore, useValueStore } from "@/lib/valueStore";
-import { dailyKey, recordRun, type RunSummary, type StoredData } from "@/lib/storage/schema";
-import { updateData, updateSettings, useStoredData } from "@/lib/storage/store";
+import { MAX_DAILY_ATTEMPTS } from "@/lib/game/daily";
+import { postDailyBest } from "@/lib/leaderboard/dailyPost";
+import {
+  attemptInProgress,
+  attemptsLeft,
+  bestAttempt,
+  dailyDone,
+  dailyKey,
+  needsPost,
+  newAttempt,
+  recordRun,
+  type RunSummary,
+  type StoredData,
+} from "@/lib/storage/schema";
+import { getData, updateData, updateSettings, useStoredData } from "@/lib/storage/store";
 import { FocusMetrics } from "./FocusMetrics";
-import { PostScore } from "./PostScore";
+import { DailyPostStatus } from "./DailyPostStatus";
+import { DailyIcon } from "@/components/DailyIcon";
 import { PrepareScreen } from "./PrepareScreen";
 import { SequenceDisplay, SequenceSlots } from "./SequenceDisplay";
 import { ModeTag } from "./ModeTag";
@@ -86,9 +100,15 @@ function GameController({
     const canSpeak = speechSupported();
     const division: Division = wantsSpoken && canSpeak ? "spoken" : "standard";
     const dateKey = utcDateKey(new Date());
+    // The attempt to play (or to recover, if one was left in progress).
+    const entry = initial.daily[dailyKey(dateKey, division)];
+    const attempt = Math.min(
+      MAX_DAILY_ATTEMPTS,
+      (entry?.attempts.length ?? 0) + (attemptInProgress(entry) ? 0 : 1),
+    );
     const config: RunConfig =
       mode === "daily"
-        ? dailyConfig(dateKey, division)
+        ? dailyConfig(dateKey, division, Math.max(1, attempt))
         : practiceConfig(division, level ?? initial.settings.practiceLevel, randomSeed(), customSeed);
     return { config, division, dateKey, spokenUnavailable: wantsSpoken && !canSpeak };
   });
@@ -117,7 +137,7 @@ function GameController({
   const [resultStore] = useState(() => createValueStore<RunResult | null>(null));
   const result = useValueStore(resultStore, null);
   const [confirmExit, setConfirmExit] = useState(false);
-  const startedHere = useRef(false);
+  const startedRun = useRef<number | null>(null);
   const recordedRun = useRef<number | null>(null);
   const pendingResult = useRef<RunResult | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -128,23 +148,27 @@ function GameController({
   const daily = setup.config.mode.kind === "daily";
   const key = dailyKey(setup.dateKey, setup.division);
 
-  // A daily run left in progress by a reload or closed tab is finalised from
-  // its stored answers. Its score comes from replaying them, never from storage.
+  // A daily attempt left in progress by a reload or closed tab is finalised
+  // from its stored answers. Its score comes from replaying them on that
+  // attempt's sequences, never from storage. Posting follows automatically.
   useEffect(() => {
     if (!daily) return;
     const out: { value: Omit<RunResult, "failure" | "quote"> | null } = { value: null };
     updateData((d) => {
       const entry = d.daily[key];
-      if (!entry || entry.status !== "in-progress") return d;
-      const replay = replayRun(setup.config, entry.answers);
+      if (!entry || !attemptInProgress(entry)) return d;
+      const attempt = entry.attempts.length;
+      const config = dailyConfig(setup.dateKey, setup.division, attempt);
+      const answers = entry.attempts[attempt - 1]!.answers;
+      const replay = replayRun(config, answers);
       const summary: RunSummary = {
-        mode: setup.config.mode,
+        mode: config.mode,
         feiMs: replay.valid ? replay.feiMs : 0,
         completed: replay.valid ? replay.completed : 0,
         maxLength: replay.valid ? replay.maxLength : 0,
         bestStreak: replay.valid ? replay.completed : 0,
         endReason: "interrupted",
-        answers: entry.answers,
+        answers,
         endedAt: Date.now(),
       };
       const rec = recordRun(d, summary);
@@ -152,46 +176,51 @@ function GameController({
       return rec.data;
     });
     if (out.value) resultStore.set({ ...out.value, failure: null, quote: null });
-  }, [daily, key, setup.config, resultStore]);
+  }, [daily, key, setup.dateKey, setup.division, resultStore]);
 
   // Ranked progress is written as the run happens, so leaving cannot reset it.
+  // Each attempt fills its own slot: attempt n is attempts[n - 1].
+  const runMode = state.config?.mode;
+  const slot = runMode?.kind === "daily" ? runMode.attempt - 1 : -1;
   useEffect(() => {
-    if (!daily || !state.challenge) return;
-    if (state.status === "observing" && state.challenge.index === 0 && state.observeStep === 0 && !startedHere.current) {
-      startedHere.current = true;
-      updateData((d) => ({
-        ...d,
-        daily: {
-          ...d.daily,
-          [key]: {
-            status: "in-progress",
-            answers: [],
-            feiMs: 0,
-            completed: 0,
-            maxLength: 0,
-            bestStreak: 0,
-            endReason: null,
-            posted: "no",
-            rank: null,
-          },
-        },
-      }));
-    }
-    if (state.status === "feedback" && startedHere.current) {
-      const answers = state.history.map((h) => [...h.answer]);
+    if (!daily || slot < 0 || !state.challenge) return;
+    if (state.status === "observing" && state.challenge.index === 0 && state.observeStep === 0 && startedRun.current !== state.runId) {
+      startedRun.current = state.runId;
       updateData((d) => {
         const entry = d.daily[key];
-        if (!entry || entry.status !== "in-progress") return d;
+        const attempts = [...(entry?.attempts ?? [])];
+        if (attempts.length > slot && attempts[slot]!.status === "finished") return d;
+        attempts[slot] = newAttempt();
         return {
           ...d,
-          daily: {
-            ...d.daily,
-            [key]: { ...entry, answers, feiMs: state.feiMs, completed: state.completed, maxLength: state.maxLengthCompleted, bestStreak: state.bestStreak },
-          },
+          daily: { ...d.daily, [key]: { attempts, postedAttempts: entry?.postedAttempts ?? 0, rank: entry?.rank ?? null } },
         };
       });
     }
-  }, [daily, key, state]);
+    if (state.status === "feedback" && startedRun.current === state.runId) {
+      const answers = state.history.map((h) => [...h.answer]);
+      updateData((d) => {
+        const entry = d.daily[key];
+        const current = entry?.attempts[slot];
+        if (!entry || !current || current.status !== "in-progress") return d;
+        const attempts = [...entry.attempts];
+        attempts[slot] = {
+          ...current,
+          answers,
+          feiMs: state.feiMs,
+          completed: state.completed,
+          maxLength: state.maxLengthCompleted,
+          bestStreak: state.bestStreak,
+        };
+        return { ...d, daily: { ...d.daily, [key]: { ...entry, attempts } } };
+      });
+    }
+  }, [daily, key, slot, state]);
+
+  // A best run that never reached the board (offline last time) posts now.
+  useEffect(() => {
+    if (daily && needsPost(getData().daily[key])) void postDailyBest(setup.dateKey, setup.division);
+  }, [daily, key, setup.dateKey, setup.division]);
 
   // Record a finished run exactly once.
   useEffect(() => {
@@ -255,10 +284,23 @@ function GameController({
     if (result) resultHeadingRef.current?.focus();
   }, [result]);
 
-  const begin = useCallback(() => {
-    if (!data.settings.rulesSeen) updateSettings({ rulesSeen: true });
-    dispatch({ type: "begin" });
-  }, [data.settings.rulesSeen, dispatch]);
+  const begin = useCallback(
+    (name: string | null) => {
+      if (name !== null) updateSettings({ displayName: name, rulesSeen: true });
+      else if (!data.settings.rulesSeen) updateSettings({ rulesSeen: true });
+      dispatch({ type: "begin" });
+    },
+    [data.settings.rulesSeen, dispatch],
+  );
+
+  // After a daily attempt: the second attempt, on its own sequences, opens on
+  // its start screen (name already filled in).
+  const nextAttempt = useCallback(() => {
+    const prev = state.config?.mode;
+    if (!prev || prev.kind !== "daily" || prev.attempt >= MAX_DAILY_ATTEMPTS) return;
+    resultStore.set(null);
+    dispatch({ type: "start", config: dailyConfig(prev.dateKey, prev.division, prev.attempt + 1) });
+  }, [state.config, dispatch, resultStore]);
 
   const restart = useCallback(() => {
     const prev = state.config;
@@ -320,18 +362,24 @@ function GameController({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const entry = data.daily[key];
+
   // Results take priority, then a finished daily, then the run itself.
   if (result) {
     return (
       <AppShell>
-        <SessionResults ref={resultHeadingRef} result={result} onRestart={daily ? null : restart} />
+        <SessionResults
+          ref={resultHeadingRef}
+          result={result}
+          onRestart={daily ? null : restart}
+          onNextAttempt={daily && attemptsLeft(entry) > 0 ? nextAttempt : null}
+        />
       </AppShell>
     );
   }
 
-  const entry = data.daily[key];
   // A run that has just ended stays on the board until its results are ready.
-  if (daily && entry?.status === "finished" && state.status !== "ended") {
+  if (daily && entry && dailyDone(entry) && state.status !== "ended") {
     return <DailyComplete dateKey={setup.dateKey} division={setup.division} entry={entry} />;
   }
 
@@ -342,6 +390,8 @@ function GameController({
           ref={headingRef}
           config={state.config ?? setup.config}
           spokenUnavailable={setup.spokenUnavailable}
+          initialName={data.settings.displayName}
+          previousBestMs={bestAttempt(entry)?.attempt.feiMs ?? null}
           onBegin={begin}
         />
       </AppShell>
@@ -461,30 +511,38 @@ function DailyComplete({
   const headingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => headingRef.current?.focus({ preventScroll: true }), []);
   const resetIn = formatCountdown(msUntilNextUtcDay(new Date()));
+  const best = bestAttempt(entry);
   return (
     <AppShell>
       <div className="pt-8 sm:pt-12">
-        <ModeTag mode={{ kind: "daily", dateKey, division }} />
-        <h1 ref={headingRef} tabIndex={-1} className="mt-2 text-headline font-semibold outline-none">
-          Today&apos;s run is in.
+        <ModeTag mode={{ kind: "daily", dateKey, division, attempt: MAX_DAILY_ATTEMPTS }} />
+        <h1 ref={headingRef} tabIndex={-1} className="mt-2 flex items-center gap-3 text-headline font-semibold outline-none">
+          <DailyIcon done />
+          Done for today.
         </h1>
-        <dl className="mt-6 flex flex-wrap gap-x-10 gap-y-4 border-y border-ink py-4">
-          <div>
-            <dt className="label">Focus Endurance Index</dt>
+
+        <dl className="mt-6 grid max-w-[34rem] gap-px border-y border-ink bg-rule sm:grid-cols-[1.4fr_1fr_1fr]">
+          <div className="bg-canvas py-4 pr-4">
+            <dt className="label">Best · on the board</dt>
             <dd className="num mt-1 text-metric">
-              <span aria-hidden="true">{formatFei(entry.feiMs)}</span>
-              <span className="sr-only">{describeFei(entry.feiMs)}</span>
+              <span aria-hidden="true">{formatFei(best?.attempt.feiMs ?? 0)}</span>
+              <span className="sr-only">{describeFei(best?.attempt.feiMs ?? 0)}</span>
             </dd>
           </div>
-          <div>
-            <dt className="label">Challenges</dt>
-            <dd className="num mt-1 text-metric">{entry.completed}</dd>
-          </div>
-          <div>
-            <dt className="label">Longest</dt>
-            <dd className="num mt-1 text-metric">{entry.maxLength}</dd>
-          </div>
+          {entry.attempts.map((a, i) => (
+            <div key={i} className="bg-canvas py-4 pr-4 sm:pl-4">
+              <dt className="label">
+                Attempt {i + 1}
+                {best?.run === i + 1 ? <span className="sr-only"> (best)</span> : null}
+              </dt>
+              <dd className={`num mt-1 text-[1.25rem] ${best?.run === i + 1 ? "font-semibold" : "text-ink-2"}`}>
+                {formatFei(a.feiMs)}
+                <span className="ml-2 text-small font-normal text-ink-2">{a.completed} held</span>
+              </dd>
+            </div>
+          ))}
         </dl>
+
         <p className="mt-4 text-ink-2">
           The next daily challenge opens in <span className="num whitespace-nowrap text-ink">{resetIn}</span> (00:00 UTC).
         </p>
@@ -497,7 +555,7 @@ function DailyComplete({
           </Link>
         </div>
         <div className="mt-10">
-          <PostScore dateKey={dateKey} division={division} />
+          <DailyPostStatus dateKey={dateKey} division={division} />
         </div>
       </div>
     </AppShell>

@@ -182,15 +182,18 @@ export function Help() {
             Add <span className="num text-ink">?seed=WORD</span> to a practice link to replay the same sequences anywhere.
           </p>
           <p>
-            <strong>The daily challenge</strong> gives every player the same sequences for one UTC day, resetting at 00:00
-            UTC. You get one ranked attempt per division. It counts from the moment the first sequence appears, and a
-            reload finishes it with the challenges already held.
+            <strong>The daily challenge</strong> resets at 00:00 UTC. You get two ranked attempts per division, and the
+            better one counts. Each attempt has its own sequences, the same for every player, so a second attempt never
+            replays the pattern a first one revealed. Enter your leaderboard name before you play. An attempt counts from
+            the moment its first sequence appears, and a reload finishes it with the challenges already held.
           </p>
           <p id="ranking">
-            <strong>Ranking.</strong> Posting a daily run sends your chosen name and the answers you entered, never a
-            score. The server rebuilds the day&apos;s sequences, replays your answers and computes the FEI itself, and keeps
-            one record per player, division and day. Ties go to more challenges completed, then to whoever posted first.
-            Without a configured backend the leaderboard is a labelled preview, not a global ranking.
+            <strong>Ranking.</strong> After each attempt your best run so far posts to the leaderboard automatically. It
+            sends your name and the answers you entered, never a score: the server rebuilds that attempt&apos;s sequences,
+            replays your answers, computes the FEI itself, and keeps the better of your two attempts in one record per player,
+            division and day. If the board cannot be reached, your runs stay on this device and post next time. Ties go to
+            more challenges completed, then to whoever posted first. Without a configured backend the leaderboard is a
+            labelled preview, not a global ranking.
           </p>
         </Section>
 
@@ -222,8 +225,8 @@ export function Help() {
             analytics or tracking; records and settings stay in this browser.
           </p>
           <p>
-            <strong>Leaderboard data.</strong> Nothing leaves your device unless you post a daily score. Posting sends the
-            name you choose, a random ID created by this browser, and the answers you entered. The leaderboard keeps the name,
+            <strong>Leaderboard data.</strong> Practice never leaves your device. Daily attempts post automatically, sending
+            the name you enter, a random ID created by this browser, and the answers you entered. The leaderboard keeps the name,
             the ID and the computed score. The ID is never shown to other players.
           </p>
           <p>The short lines shown between rounds are original to SYNAPSE.</p>

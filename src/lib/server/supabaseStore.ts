@@ -1,5 +1,5 @@
 import type { Division } from "@/lib/game/rules";
-import type { ScoreRecord, ScoreStore } from "./scoreStore";
+import type { ScoreRecord, ScoreStore, SubmitOutcome } from "./scoreStore";
 
 /**
  * Supabase (Postgres via PostgREST) store.
@@ -22,9 +22,10 @@ interface Row {
   completed: number;
   max_length: number;
   submitted_at: string;
+  attempts?: number;
 }
 
-const COLUMNS = "date_key,division,player_id,display_name,fei_ms,completed,max_length,submitted_at";
+const COLUMNS = "date_key,division,player_id,display_name,fei_ms,completed,max_length,submitted_at,attempts";
 const ORDER = "fei_ms.desc,completed.desc,submitted_at.asc";
 /** Read cap per query. Past this, ranking should move into SQL (window functions). */
 export const SUPABASE_READ_LIMIT = 1000;
@@ -39,6 +40,7 @@ function toRecord(row: Row): ScoreRecord {
     completed: row.completed,
     maxLength: row.max_length,
     submittedAt: Date.parse(row.submitted_at),
+    attempts: row.attempts ?? 1,
   };
 }
 
@@ -71,7 +73,8 @@ export function createSupabaseStore(
   serviceKey: string,
   fetchImpl: typeof fetch = fetch,
 ): ScoreStore {
-  const endpoint = `${baseUrl.replace(/\/$/, "")}/rest/v1/daily_scores`;
+  const base = baseUrl.replace(/\/$/, "");
+  const endpoint = `${base}/rest/v1/daily_scores`;
   const headers = { ...supabaseAuthHeaders(serviceKey), "Content-Type": "application/json" };
 
   async function list(query: string): Promise<ScoreRecord[]> {
@@ -85,26 +88,32 @@ export function createSupabaseStore(
 
   return {
     info: { kind: "supabase", isPreview: false, label: "Global daily ranking." },
-    async insert(record) {
-      const row: Omit<Row, "submitted_at"> = {
-        date_key: record.dateKey,
-        division: record.division,
-        player_id: record.playerId,
-        display_name: record.displayName,
-        fei_ms: record.feiMs,
-        completed: record.completed,
-        max_length: record.maxLength,
-      };
-      const res = await fetchImpl(endpoint, {
+    // The best-of-two rule runs inside Postgres (submit_daily_score, from
+    // migration 0002), so two quick requests cannot both "win".
+    async submit(record) {
+      const res = await fetchImpl(`${base}/rest/v1/rpc/submit_daily_score`, {
         method: "POST",
-        headers: { ...headers, Prefer: "return=minimal" },
-        body: JSON.stringify(row),
+        headers,
+        body: JSON.stringify({
+          p_date_key: record.dateKey,
+          p_division: record.division,
+          p_player_id: record.playerId,
+          p_display_name: record.displayName,
+          p_fei_ms: record.feiMs,
+          p_completed: record.completed,
+          p_max_length: record.maxLength,
+          p_attempt: record.attempts,
+        }),
         signal: AbortSignal.timeout(SUPABASE_TIMEOUT_MS),
       });
-      // 409 is PostgREST's answer to the unique (date_key, division, player_id) constraint.
-      if (res.status === 409) return "duplicate";
-      if (!res.ok) throw new Error(`Supabase insert failed: ${res.status}`);
-      return "inserted";
+      if (!res.ok) throw new Error(`Supabase submit failed: ${res.status}`);
+      const rows = (await res.json()) as (Omit<Row, "date_key" | "division" | "player_id"> & { outcome: SubmitOutcome })[];
+      const row = rows[0];
+      if (!row) throw new Error("Supabase submit returned no row");
+      return {
+        outcome: row.outcome,
+        record: toRecord({ ...row, date_key: record.dateKey, division: record.division, player_id: record.playerId }),
+      };
     },
     listDaily(dateKey, division) {
       return list(`date_key=eq.${encodeURIComponent(dateKey)}&division=eq.${division}`);

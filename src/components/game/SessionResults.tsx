@@ -12,7 +12,7 @@ import type { Quote } from "@/lib/quotes";
 import type { RunSummary } from "@/lib/storage/schema";
 import { ModeTag } from "./ModeTag";
 import { PatternComparison } from "./PatternComparison";
-import { PostScore } from "./PostScore";
+import { DailyPostStatus } from "./DailyPostStatus";
 
 export interface RunResult {
   summary: RunSummary;
@@ -49,8 +49,16 @@ function headline(result: RunResult): { title: string; sub: string | null } {
   return { title: "Run ended", sub: "Everything held before you left is banked." };
 }
 
-export const SessionResults = forwardRef<HTMLHeadingElement, { result: RunResult; onRestart: (() => void) | null }>(
-  function SessionResults({ result, onRestart }, headingRef) {
+export const SessionResults = forwardRef<
+  HTMLHeadingElement,
+  {
+    result: RunResult;
+    onRestart: (() => void) | null;
+    /** Daily only, when a second attempt is still available. */
+    onNextAttempt?: (() => void) | null;
+  }
+>(
+  function SessionResults({ result, onRestart, onNextAttempt = null }, headingRef) {
     const { summary: s, previousBestMs, isPersonalBest, failure, quote } = result;
     const [shareState, setShareState] = useState<"idle" | "copied" | "manual">("idle");
     const text = shareText(s);
@@ -132,8 +140,18 @@ export const SessionResults = forwardRef<HTMLHeadingElement, { result: RunResult
           </section>
         </div>
 
+        {s.mode.kind === "daily" ? (
+          <div className="mt-8">
+            <DailyPostStatus dateKey={s.mode.dateKey} division={s.mode.division} />
+          </div>
+        ) : null}
+
         <div className="mt-8 grid gap-2 sm:flex sm:flex-wrap">
-          {onRestart ? (
+          {onNextAttempt ? (
+            <button type="button" className="btn btn-primary sm:min-w-44" onClick={onNextAttempt}>
+              Play attempt 2 of 2
+            </button>
+          ) : onRestart ? (
             <button type="button" className="btn btn-primary sm:min-w-44" onClick={onRestart}>
               <RotateCcw aria-hidden="true" className="size-4" />
               Play again
@@ -170,11 +188,6 @@ export const SessionResults = forwardRef<HTMLHeadingElement, { result: RunResult
           </div>
         ) : null}
 
-        {s.mode.kind === "daily" ? (
-          <div className="mt-10">
-            <PostScore dateKey={s.mode.dateKey} division={s.mode.division} />
-          </div>
-        ) : null}
       </div>
     );
   },

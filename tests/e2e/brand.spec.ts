@@ -21,7 +21,7 @@ test("the launch screen holds only what starts a session", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Help" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Settings" })).toBeVisible();
   // No token grid, tables, statistics blocks or leaderboard content.
-  await expect(page.locator("main table, main .token-key, main dl, main svg")).toHaveCount(1); // the Play arrow only
+  await expect(page.locator("main table, main .token-key, main dl, main svg")).toHaveCount(2); // the Play arrow and the daily globe
   const words = (await page.locator("main").innerText()).split(/\s+/).filter(Boolean).length;
   expect(words).toBeLessThanOrEqual(25);
 });

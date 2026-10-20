@@ -25,12 +25,45 @@ export interface ScoreRecord {
   completed: number;
   maxLength: number;
   submittedAt: number;
+  /** How many of the day's attempts have been counted for this record (1 or 2). */
+  attempts: number;
+}
+
+export { MAX_DAILY_ATTEMPTS } from "@/lib/game/daily";
+
+export type { SubmitOutcome } from "@/lib/leaderboard/types";
+import type { SubmitOutcome } from "@/lib/leaderboard/types";
+
+export interface SubmitResult {
+  outcome: SubmitOutcome;
+  /** The stored record after the submission. */
+  record: ScoreRecord;
+}
+
+/**
+ * The best-of-two rule, shared by every store (Supabase runs the same logic
+ * in SQL, in submit_daily_score). `incoming.attempts` is the attempt number.
+ *  - no record yet: insert it
+ *  - attempt number not above the stored count: a resend, nothing changes
+ *  - better score (FEI, then challenges completed): replace it
+ *  - otherwise: keep the stored score, count the attempt, take the latest name
+ */
+export function applySubmission(existing: ScoreRecord | undefined, incoming: ScoreRecord): SubmitResult {
+  if (!existing) return { outcome: "inserted", record: incoming };
+  if (incoming.attempts <= existing.attempts) return { outcome: "unchanged", record: existing };
+  const better =
+    incoming.feiMs > existing.feiMs || (incoming.feiMs === existing.feiMs && incoming.completed > existing.completed);
+  if (better) return { outcome: "improved", record: incoming };
+  return {
+    outcome: "kept",
+    record: { ...existing, displayName: incoming.displayName, attempts: incoming.attempts },
+  };
 }
 
 export interface ScoreStore {
   info: BackendInfo;
-  /** Inserts unless this player already has a record for this date and division. */
-  insert(record: ScoreRecord): Promise<"inserted" | "duplicate">;
+  /** Applies one verified attempt under the best-of-two rule. */
+  submit(record: ScoreRecord): Promise<SubmitResult>;
   listDaily(dateKey: string, division: Division): Promise<ScoreRecord[]>;
   listAllTime(division: Division): Promise<ScoreRecord[]>;
 }
@@ -55,10 +88,12 @@ export function createMemoryStore(label: string = MEMORY_LABEL): ScoreStore {
       isPreview: true,
       label,
     },
-    async insert(record) {
-      if (records.some((r) => sameSlot(r, record))) return "duplicate";
-      records.push(record);
-      return "inserted";
+    async submit(record) {
+      const i = records.findIndex((r) => sameSlot(r, record));
+      const result = applySubmission(i === -1 ? undefined : records[i], record);
+      if (i === -1) records.push(result.record);
+      else records[i] = result.record;
+      return result;
     },
     async listDaily(dateKey, division) {
       return records.filter((r) => r.dateKey === dateKey && r.division === division).sort(compareRecords);
@@ -79,7 +114,8 @@ export function createFileStore(file: string): ScoreStore {
     try {
       const parsed: unknown = JSON.parse(await fs.readFile(file, "utf8"));
       const list = (parsed as { records?: unknown }).records;
-      records = Array.isArray(list) ? (list as ScoreRecord[]) : [];
+      // Files written before two attempts existed have no count: treat as one.
+      records = Array.isArray(list) ? (list as ScoreRecord[]).map((r) => ({ ...r, attempts: r.attempts ?? 1 })) : [];
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
         // Keep a corrupt file for inspection rather than overwriting it.
@@ -103,14 +139,16 @@ export function createFileStore(file: string): ScoreStore {
       isPreview: true,
       label: "Preview server. Scores are saved on the machine running this app, not in a global ranking.",
     },
-    insert(record) {
+    submit(record) {
       const run = queue.then(async () => {
         const list = await load();
-        if (list.some((r) => sameSlot(r, record))) return "duplicate" as const;
-        const nextList = [...list, record];
+        const i = list.findIndex((r) => sameSlot(r, record));
+        const result = applySubmission(i === -1 ? undefined : list[i], record);
+        if (result.outcome === "unchanged") return result;
+        const nextList = i === -1 ? [...list, result.record] : list.map((r, j) => (j === i ? result.record : r));
         await save(nextList);
         records = nextList;
-        return "inserted" as const;
+        return result;
       });
       queue = run.catch(() => undefined);
       return run;

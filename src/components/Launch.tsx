@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { NavLinks } from "./AppShell";
+import { DailyIcon } from "./DailyIcon";
 import { GlitchWord } from "./GlitchWord";
 import { Wordmark } from "./Wordmark";
 import { utcDateKey } from "@/lib/game/daily";
 import { practiceLevel } from "@/lib/game/rules";
 import { describeFei, formatFei } from "@/lib/game/scoring";
-import { dailyKey } from "@/lib/storage/schema";
+import { MAX_DAILY_ATTEMPTS } from "@/lib/game/daily";
+import { attemptInProgress, attemptsLeft, dailyDone, dailyKey } from "@/lib/storage/schema";
 import { useStoredData } from "@/lib/storage/store";
 
 /**
@@ -21,8 +23,15 @@ export function Launch() {
   const best = data && level ? data.stats[`practice:standard:${level.id}`] : undefined;
   const division = data?.settings.presentation === "spoken" ? "spoken" : "standard";
   const daily = data ? data.daily[dailyKey(utcDateKey(new Date()), division)] : undefined;
-  const dailyLabel =
-    daily?.status === "finished" ? "Daily challenge · done today" : daily?.status === "in-progress" ? "Daily challenge · interrupted" : "Daily challenge";
+  const done = dailyDone(daily);
+  const left = attemptsLeft(daily);
+  const dailyStatus = done
+    ? "done for today"
+    : attemptInProgress(daily)
+      ? "interrupted"
+      : left < MAX_DAILY_ATTEMPTS
+        ? `${left} attempt${left === 1 ? "" : "s"} left`
+        : null;
 
   return (
     <div className="flex min-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] flex-col">
@@ -56,8 +65,10 @@ export function Launch() {
             <ArrowRight aria-hidden="true" className="size-5" />
           </Link>
           <div className="grid gap-1">
-            <Link href="/play?mode=daily" className="link inline-flex min-h-11 items-center self-start">
-              {dailyLabel}
+            <Link href="/play?mode=daily" className="daily-link group inline-flex min-h-11 items-center gap-2.5 self-start">
+              <DailyIcon done={done} />
+              <span className="underline decoration-1 underline-offset-[0.2em] group-hover:decoration-2">Daily challenge</span>
+              {dailyStatus ? <span className="text-small text-ink-2">· {dailyStatus}</span> : null}
             </Link>
             {best && best.runs > 0 ? (
               <p className="num text-small text-ink-2">

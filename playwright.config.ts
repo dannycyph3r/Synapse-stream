@@ -28,7 +28,7 @@ export default defineConfig({
     command: "npm run start:e2e",
     url: "http://localhost:3100",
     reuseExistingServer: !process.env.CI,
-    env: { LEADERBOARD_STORE: "memory" },
+    env: { LEADERBOARD_STORE: "memory", LEADERBOARD_SUBMIT_LIMIT: "1000" },
     timeout: 60_000,
   },
 });

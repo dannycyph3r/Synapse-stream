@@ -23,15 +23,17 @@ const SECRET = "sb_secret_test_key";
 const TODAY = "2026-10-20";
 const NOW = new Date("2026-10-20T15:00:00Z");
 const COLUMNS = new Set(["date_key", "division", "player_id", "display_name", "fei_ms", "completed", "max_length", "submitted_at"]);
-const MIGRATION = readFileSync(path.join(import.meta.dirname, "../../supabase/migrations/0001_daily_scores.sql"), "utf8");
+const MIGRATION = ["0001_daily_scores.sql", "0002_daily_attempts.sql"]
+  .map((f) => readFileSync(path.join(import.meta.dirname, "../../supabase/migrations", f), "utf8"))
+  .join("\n");
 
 let db: PGlite;
 let server: Server;
 let baseUrl: string;
 const seenHeaders: Record<string, string | undefined>[] = [];
 
-function answers(n: number) {
-  const config = dailyConfig(TODAY, "standard");
+function answers(n: number, run = 1) {
+  const config = dailyConfig(TODAY, "standard", run);
   return Array.from({ length: n }, (_, i) => [...buildChallenge(config, i).sequence]);
 }
 
@@ -59,6 +61,22 @@ beforeAll(async () => {
       return;
     }
     const url = new URL(req.url!, "http://x");
+    if (url.pathname === "/rest/v1/rpc/submit_daily_score" && req.method === "POST") {
+      // PostgREST calls the function with named arguments and returns its rows as JSON.
+      let raw = "";
+      for await (const chunk of req) raw += chunk;
+      const a = JSON.parse(raw) as Record<string, unknown>;
+      const names = ["p_date_key", "p_division", "p_player_id", "p_display_name", "p_fei_ms", "p_completed", "p_max_length", "p_attempt"];
+      try {
+        const result = await asService(() =>
+          db.query(`select * from public.submit_daily_score(${names.map((n, i) => `${n} => $${i + 1}`).join(", ")})`, names.map((n) => a[n])),
+        );
+        res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(result.rows));
+      } catch (err) {
+        res.writeHead(400).end(JSON.stringify({ code: (err as { code?: string }).code }));
+      }
+      return;
+    }
     if (url.pathname !== "/rest/v1/daily_scores") {
       res.writeHead(404).end('{"code":"PGRST205"}');
       return;
@@ -117,22 +135,26 @@ afterAll(async () => {
 });
 
 describe("leaderboard against Postgres through a REST stand-in", () => {
-  it("accepts verified runs, refuses duplicates and ranks players", async () => {
+  it("accepts verified runs, keeps each player's best of two attempts and ranks players", async () => {
     const store = createSupabaseStore(baseUrl, SECRET);
     const deps = { store, now: NOW };
     const ada = "3f2b8c1e-6a0d-4e7b-9c55-1d2e3f4a5b6c";
     const bo = "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d";
 
-    const first = await handleSubmit({ dateKey: TODAY, division: "standard", playerId: ada, displayName: "Ada", answers: answers(3) }, deps);
+    const first = await handleSubmit({ dateKey: TODAY, division: "standard", playerId: ada, displayName: "Ada", answers: answers(3), attempt: 1 }, deps);
     expect(first.status).toBe(201);
-    expect(first.body).toMatchObject({ status: "accepted", entry: { rank: 1, feiMs: 3 * 1500 * 2 + 4 * 1500 } });
+    expect(first.body).toMatchObject({ status: "accepted", outcome: "inserted", entry: { rank: 1, feiMs: 3 * 1500 * 2 + 4 * 1500 } });
 
-    const second = await handleSubmit({ dateKey: TODAY, division: "standard", playerId: bo, displayName: "Bo Lee", answers: answers(5) }, deps);
+    const second = await handleSubmit({ dateKey: TODAY, division: "standard", playerId: bo, displayName: "Bo Lee", answers: answers(5), attempt: 1 }, deps);
     expect(second.body).toMatchObject({ status: "accepted", entry: { rank: 1 } });
 
-    const again = await handleSubmit({ dateKey: TODAY, division: "standard", playerId: ada, displayName: "Ada", answers: answers(6) }, deps);
-    expect(again.status).toBe(409);
-    expect(again.body).toMatchObject({ status: "duplicate", entry: { rank: 2, displayName: "Ada" } });
+    // Ada's resend of attempt 1 changes nothing.
+    const resend = await handleSubmit({ dateKey: TODAY, division: "standard", playerId: ada, displayName: "Ada", answers: answers(6), attempt: 1 }, deps);
+    expect(resend.body).toMatchObject({ outcome: "unchanged", entry: { rank: 2, completed: 3 } });
+
+    // Bo's worse second attempt keeps the first.
+    const boWorse = await handleSubmit({ dateKey: TODAY, division: "standard", playerId: bo, displayName: "Bo Lee", answers: answers(2, 2), attempt: 2 }, deps);
+    expect(boWorse.body).toMatchObject({ outcome: "kept", attempts: 2, entry: { completed: 5 } });
 
     const board = await handleQuery({ period: "daily", date: TODAY, division: "standard", playerId: ada }, deps);
     const snap = board.body as LeaderboardSnapshot;
@@ -142,6 +164,10 @@ describe("leaderboard against Postgres through a REST stand-in", () => {
       [2, "Ada", true],
     ]);
     expect(JSON.stringify(snap)).not.toContain(bo);
+
+    // Ada's better second attempt takes first place.
+    const adaBetter = await handleSubmit({ dateKey: TODAY, division: "standard", playerId: ada, displayName: "Ada", answers: answers(6, 2), attempt: 2 }, deps);
+    expect(adaBetter.body).toMatchObject({ outcome: "improved", attempts: 2, entry: { rank: 1, completed: 6 } });
   });
 
   it("sends the new secret key only in the apikey header", () => {

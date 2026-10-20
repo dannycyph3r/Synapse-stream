@@ -3,7 +3,8 @@
  * npm run check:leaderboard
  *
  * Read-only check that a Supabase project is ready for the SYNAPSE
- * leaderboard. It never writes. Reads SUPABASE_URL and SUPABASE_SECRET_KEY
+ * leaderboard. It never writes: the one function call it makes is rejected by
+ * the function itself before any row is touched. Reads SUPABASE_URL and SUPABASE_SECRET_KEY
  * (or SUPABASE_SERVICE_ROLE_KEY) from the environment or .env.local.
  * Optionally checks SUPABASE_PUBLISHABLE_KEY (or SUPABASE_ANON_KEY) to confirm
  * that browsers cannot read player ids.
@@ -86,6 +87,36 @@ export async function checkLeaderboard({ url, key, browserKey, fetchImpl = fetch
   } else {
     add(false, "Table can be read", `HTTP ${res.status}: ${body.slice(0, 200)}`);
     return results;
+  }
+
+  // The best-of-two function from migration 0002. Probed with an invalid
+  // attempt number, which the function rejects before touching any row.
+  try {
+    const rpc = await fetchImpl(`${base.origin}/rest/v1/rpc/submit_daily_score`, {
+      method: "POST",
+      headers: { ...headersFor(key), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        p_date_key: "2000-01-01",
+        p_division: "standard",
+        p_player_id: "00000000-0000-4000-8000-000000000000",
+        p_display_name: "check",
+        p_fei_ms: 0,
+        p_completed: 0,
+        p_max_length: 0,
+        p_attempt: 0,
+      }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const text = await rpc.text();
+    if (text.includes("22023") || text.includes("attempt must be 1 or 2")) {
+      add(true, "Two-attempt function (migration 0002) is installed");
+    } else if (rpc.status === 404 || text.includes("PGRST202")) {
+      add(false, "Two-attempt function (migration 0002) is installed", "Run supabase/migrations/0002_daily_attempts.sql (SQL Editor, or `npx supabase db push`).");
+    } else {
+      add(false, "Two-attempt function (migration 0002) is installed", `Unexpected HTTP ${rpc.status}: ${text.slice(0, 160)}`);
+    }
+  } catch {
+    add(false, "Two-attempt function (migration 0002) is installed", "Network error.");
   }
 
   if (browserKey) {
