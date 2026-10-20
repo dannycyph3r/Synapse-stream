@@ -16,7 +16,7 @@ import {
 import { handleQuery, handleSubmit } from "@/lib/server/leaderboard";
 import { createRateLimiter } from "@/lib/server/rateLimit";
 import { SERVERLESS_LABEL, createFileStore, createMemoryStore, selectStoreKind } from "@/lib/server/scoreStore";
-import { createSupabaseStore } from "@/lib/server/supabaseStore";
+import { createSupabaseStore, supabaseAuthHeaders, supabaseKeyKind } from "@/lib/server/supabaseStore";
 
 const ID = "3f2b8c1e-6a0d-4e7b-9c55-1d2e3f4a5b6c";
 const ID2 = "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d";
@@ -283,9 +283,16 @@ describe("score stores", () => {
 });
 
 describe("store selection", () => {
-  it("uses Supabase whenever both credentials are present", () => {
+  it("uses Supabase when a URL and either key variable are present", () => {
     expect(selectStoreKind({ SUPABASE_URL: "https://x.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "k", VERCEL: "1" })).toBe("supabase");
+    expect(selectStoreKind({ SUPABASE_URL: "https://x.supabase.co", SUPABASE_SECRET_KEY: "sb_secret_x" })).toBe("supabase");
     expect(selectStoreKind({ SUPABASE_URL: "https://x.supabase.co" })).toBe("file");
+  });
+
+  it("lets an explicit LEADERBOARD_STORE override Supabase, so tests never touch a real project", () => {
+    const real = { SUPABASE_URL: "https://x.supabase.co", SUPABASE_SECRET_KEY: "sb_secret_x" };
+    expect(selectStoreKind({ ...real, LEADERBOARD_STORE: "memory" })).toBe("memory");
+    expect(selectStoreKind({ ...real, LEADERBOARD_STORE: "file" })).toBe("file");
   });
 
   it("never uses the file store on Vercel unless told to", () => {
@@ -299,5 +306,37 @@ describe("store selection", () => {
     const store = createMemoryStore(SERVERLESS_LABEL);
     expect(store.info.isPreview).toBe(true);
     expect(store.info.label).toMatch(/temporary/);
+  });
+});
+
+describe("Supabase keys", () => {
+  const legacy = "eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.c2ln";
+
+  it("recognises both key generations and the wrong kind", () => {
+    expect(supabaseKeyKind("sb_secret_abc")).toBe("secret");
+    expect(supabaseKeyKind("sb_publishable_abc")).toBe("publishable");
+    expect(supabaseKeyKind(legacy)).toBe("legacy-service-role");
+    expect(supabaseKeyKind("nonsense")).toBe("unknown");
+  });
+
+  it("never sends a new secret key as a Bearer token", () => {
+    expect(supabaseAuthHeaders("sb_secret_abc")).toEqual({ apikey: "sb_secret_abc" });
+    expect(supabaseAuthHeaders(legacy)).toEqual({ apikey: legacy, Authorization: `Bearer ${legacy}` });
+  });
+
+  it("sends the right headers and a timeout on every request", async () => {
+    const calls: RequestInit[] = [];
+    const fetchMock = (async (_url: string, init?: RequestInit) => {
+      calls.push(init!);
+      return init?.method === "POST" ? new Response(null, { status: 201 }) : Response.json([]);
+    }) as unknown as typeof fetch;
+    const store = createSupabaseStore("https://x.supabase.co", "sb_secret_abc", fetchMock);
+    await store.insert({ dateKey: TODAY, division: "standard", playerId: ID, displayName: "Ada", feiMs: 4500, completed: 1, maxLength: 3, submittedAt: 1 });
+    await store.listDaily(TODAY, "standard");
+    for (const init of calls) {
+      expect(init.headers).toMatchObject({ apikey: "sb_secret_abc" });
+      expect(init.headers).not.toHaveProperty("Authorization");
+      expect(init.signal).toBeInstanceOf(AbortSignal);
+    }
   });
 });

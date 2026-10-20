@@ -136,11 +136,18 @@ export type StoreKind = "supabase" | "memory" | "serverless-memory" | "file";
  * deployment falls back to memory, labelled as temporary.
  */
 export function selectStoreKind(env: Record<string, string | undefined>): StoreKind {
-  if (env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY) return "supabase";
+  // An explicit LEADERBOARD_STORE always wins, so local test runs can never
+  // write to a real Supabase project that happens to be configured in .env.local.
   if (env.LEADERBOARD_STORE === "memory") return "memory";
   if (env.LEADERBOARD_STORE === "file") return "file";
+  if (env.SUPABASE_URL && supabaseKey(env)) return "supabase";
   if (env.VERCEL) return "serverless-memory";
   return "file";
+}
+
+/** SUPABASE_SECRET_KEY (new key format) or SUPABASE_SERVICE_ROLE_KEY (either format). */
+export function supabaseKey(env: Record<string, string | undefined>): string | undefined {
+  return env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY || undefined;
 }
 
 const globalForStore = globalThis as unknown as { __synapseStore?: ScoreStore };
@@ -152,7 +159,7 @@ export function getScoreStore(): ScoreStore {
   let store: ScoreStore;
   switch (selectStoreKind(env)) {
     case "supabase":
-      store = createSupabaseStore(env.SUPABASE_URL!, env.SUPABASE_SERVICE_ROLE_KEY!);
+      store = createSupabaseStore(env.SUPABASE_URL!, supabaseKey(env)!);
       break;
     case "memory":
       store = createMemoryStore();

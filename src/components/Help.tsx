@@ -221,6 +221,11 @@ export function Help() {
             SYNAPSE is a focus-training game. It is not a medical, diagnostic or therapeutic tool. There are no accounts,
             analytics or tracking; records and settings stay in this browser.
           </p>
+          <p>
+            <strong>Leaderboard data.</strong> Nothing leaves your device unless you post a daily score. Posting sends the
+            name you choose, a random ID created by this browser, and the answers you entered. The leaderboard keeps the name,
+            the ID and the computed score. The ID is never shown to other players.
+          </p>
           <p>The short lines shown between rounds are original to SYNAPSE.</p>
         </Section>
       </div>

@@ -22,18 +22,23 @@ create index if not exists daily_scores_rank_idx
 
 alter table public.daily_scores enable row level security;
 
--- Anyone may read the board, but only its public columns: player_id is the
--- player's private device identifier and is never readable from a browser.
-revoke select on public.daily_scores from anon, authenticated;
+-- Browser roles: read-only, public columns only. Supabase grants every
+-- privilege on new public tables to anon and authenticated by default,
+-- including TRUNCATE, which Row Level Security does not cover, so revoke
+-- everything first. player_id is the player's private device identifier and
+-- is never readable from a browser.
+revoke all on public.daily_scores from anon, authenticated;
 grant select (date_key, division, display_name, fei_ms, completed, max_length, submitted_at)
   on public.daily_scores to anon, authenticated;
 
+-- Safe to re-run: replace the policy rather than fail on a duplicate.
+drop policy if exists "daily scores are publicly readable" on public.daily_scores;
 create policy "daily scores are publicly readable"
   on public.daily_scores for select
   to anon, authenticated
   using (true);
 
--- No insert, update or delete policy exists for anon or authenticated, so
--- with RLS enabled those roles cannot write at all. Only the service role,
--- used by the server after verification, can insert.
-revoke insert, update, delete on public.daily_scores from anon, authenticated;
+-- The server reads and writes with the service role after verifying each run.
+-- Granted explicitly, so it works even on projects that do not grant new
+-- tables to API roles automatically. DELETE is for moderating names.
+grant select, insert, delete on public.daily_scores to service_role;

@@ -45,6 +45,7 @@ npm test             # Vitest unit tests: engine, scoring, dates, storage, serve
 npm run build
 npm run test:e2e     # Playwright against the production build on port 3100
 npm run test:all     # all of the above, in order
+npm run check:leaderboard   # read-only check of a configured Supabase project
 ```
 
 The browser tests start `next start` on port 3100 with an in-memory leaderboard. Install Playwright's browser once with `npx playwright install chromium`. If that download is unavailable, point the tests at any local Chrome or Chromium:
@@ -69,7 +70,7 @@ Node is pinned to 22 for CI through `.nvmrc`; `package.json` declares `>=20.9.0`
 1. In Vercel, choose **Add New → Project** and import the GitHub repository.
 2. Keep the detected defaults: framework **Next.js**, build command `npm run build`, install command `npm install`, no output directory override. No `vercel.json` is needed.
 3. Deploy. With no environment variables, the game, practice, daily challenge, statistics and settings all work fully. The leaderboard runs as a clearly labelled temporary preview.
-4. For a real shared leaderboard, run the Supabase migration below, then add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` under **Settings → Environment Variables** (Production, and Preview if wanted) and redeploy. Never expose the service role key with a `NEXT_PUBLIC_` prefix.
+4. For a real shared leaderboard, follow [Connect Supabase](#connect-supabase), then add `SUPABASE_URL` and `SUPABASE_SECRET_KEY` under **Settings → Environment Variables** for **Production only** and redeploy. Leaving them off Preview keeps pull-request deployments away from real scores. Never give either variable a `NEXT_PUBLIC_` prefix.
 
 Every push to `main` then deploys to production, and every pull request gets a preview URL.
 
@@ -166,16 +167,34 @@ Player ids are never returned by the API. Ranking is by FEI, then challenges com
 | `file` (default locally) | no Supabase credentials | No. JSON at `.data/scores.json` on the machine running the app |
 | `memory` | `LEADERBOARD_STORE=memory` | No. Lost on restart; used by the browser tests |
 | `memory` (serverless) | on Vercel (`VERCEL` is set) without Supabase | No. Temporary per server instance; can reset at any time |
-| `supabase` | `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` set | Yes |
+| `supabase` | `SUPABASE_URL` plus `SUPABASE_SECRET_KEY` (or `SUPABASE_SERVICE_ROLE_KEY`) | Yes |
+
+An explicit `LEADERBOARD_STORE` always wins, so the browser tests (which set `memory`) can never write to a real project configured in `.env.local`.
 
 The preview stores are labelled as previews wherever the leaderboard appears. They are useful for a demo; they are not a global ranking. Vercel's filesystem is read-only and per instance, so a deployment never uses the file store.
 
-To use Supabase:
+### Connect Supabase
 
-1. Run `supabase/migrations/0001_daily_scores.sql`. It creates the table with a unique `(date_key, division, player_id)` constraint, enables Row Level Security, exposes only public columns for reading, and gives browsers no write access.
-2. Copy `.env.example` to `.env.local` and set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. Both are read only on the server; never prefix them with `NEXT_PUBLIC_`.
+1. **Create a project** in your Supabase dashboard (a US East region sits close to Vercel's default functions). Keep the Data API enabled with the `public` schema exposed; both are the defaults.
+2. **Create the table** with either:
+   - the dashboard: SQL Editor → paste `supabase/migrations/0001_daily_scores.sql` → Run; or
+   - the Supabase CLI, from this folder: `supabase login`, `supabase link --project-ref <ref>`, then `supabase db push`.
 
-The Supabase store is covered by a unit test of its request shapes but has not been run against a live project.
+   The migration is safe to run more than once. It creates the table with a unique `(date_key, division, player_id)` constraint, enables Row Level Security, revokes every browser privilege (including `TRUNCATE`, which RLS does not cover), grants browsers read access to public columns only, and grants the server role explicitly.
+3. **Copy two values** from Project Settings: the **Project URL** and a **secret key** (`sb_secret_...`). A legacy `service_role` key also works, but Supabase is retiring those.
+4. **Put them in `.env.local`** as `SUPABASE_URL` and `SUPABASE_SECRET_KEY` (see `.env.example`). Optionally add the publishable key as `SUPABASE_PUBLISHABLE_KEY`.
+5. **Check the connection:** `npm run check:leaderboard`. It is read-only and reports, in plain words, whether the URL, key, table and browser permissions are right.
+6. **Add the same two variables in Vercel** (Production) and redeploy. `https://<your-site>/api/leaderboard` should then report `"kind":"supabase"` and `"isPreview":false`, and the preview banner disappears.
+
+Server keys go only in the `apikey` header for new `sb_secret_` keys (they are not JWTs), and in both `apikey` and `Authorization` for legacy JWT keys. Every Supabase request times out after 8 seconds, so a paused project shows the leaderboard's "could not be reached" state instead of hanging.
+
+How it was verified without a live project: `tests/unit/migration.test.ts` runs the migration in PGlite (Postgres compiled to WebAssembly) with Supabase's roles recreated and checks every privilege; `tests/unit/supabase-integration.test.ts` runs the real store and handlers over HTTP against a stand-in for Supabase's REST layer backed by that database. Neither is Supabase itself, so run `npm run check:leaderboard` once against your project.
+
+Operational notes:
+
+- Free projects pause after a week without activity; restore from the dashboard, or upgrade, if the board goes quiet.
+- Ranks are computed from at most the top 1,000 rows per query. Past 1,000 players a day, move ranking into SQL.
+- Display names are public. To remove one, delete its row in Table Editor.
 
 ### Anti-cheat limits
 
@@ -246,7 +265,7 @@ No accounts, analytics or third-party requests. Fonts are bundled. Records and s
 
 ## Known limitations
 
-- The leaderboard is a preview unless Supabase is configured; on Vercel without Supabase it is temporary per server instance. The Supabase adapter is untested against a live project.
+- The leaderboard is a preview unless Supabase is configured; on Vercel without Supabase it is temporary per server instance. The Supabase path is verified against Postgres and a REST stand-in, not yet against a live project; run `npm run check:leaderboard` once connected.
 - Anti-cheat limits as listed above.
 - Spoken presentation depends on the browser's speech synthesis voice; timing is tuned for typical English voices.
 - Sound is a single synthesised tick per token and a confirmation tone; there is no richer sound design.

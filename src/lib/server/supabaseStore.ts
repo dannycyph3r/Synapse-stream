@@ -42,22 +42,42 @@ function toRecord(row: Row): ScoreRecord {
   };
 }
 
+/** A paused or unreachable project must fail fast, not hold a request open. */
+export const SUPABASE_TIMEOUT_MS = 8000;
+
+export type SupabaseKeyKind = "secret" | "legacy-service-role" | "publishable" | "unknown";
+
+/**
+ * Supabase has two key generations. New secret keys (sb_secret_...) are not
+ * JWTs and go only in the apikey header; sending one as a Bearer token is
+ * rejected. Legacy service_role keys are JWTs and go in both headers.
+ * Publishable keys are browser keys and cannot write to this table.
+ */
+export function supabaseKeyKind(key: string): SupabaseKeyKind {
+  if (key.startsWith("sb_secret_")) return "secret";
+  if (key.startsWith("sb_publishable_")) return "publishable";
+  if (key.split(".").length === 3 && key.startsWith("eyJ")) return "legacy-service-role";
+  return "unknown";
+}
+
+export function supabaseAuthHeaders(key: string): Record<string, string> {
+  return supabaseKeyKind(key) === "legacy-service-role"
+    ? { apikey: key, Authorization: `Bearer ${key}` }
+    : { apikey: key };
+}
+
 export function createSupabaseStore(
   baseUrl: string,
   serviceKey: string,
   fetchImpl: typeof fetch = fetch,
 ): ScoreStore {
   const endpoint = `${baseUrl.replace(/\/$/, "")}/rest/v1/daily_scores`;
-  const headers = {
-    apikey: serviceKey,
-    Authorization: `Bearer ${serviceKey}`,
-    "Content-Type": "application/json",
-  };
+  const headers = { ...supabaseAuthHeaders(serviceKey), "Content-Type": "application/json" };
 
   async function list(query: string): Promise<ScoreRecord[]> {
     const res = await fetchImpl(
       `${endpoint}?select=${COLUMNS}&${query}&order=${ORDER}&limit=${SUPABASE_READ_LIMIT}`,
-      { headers, cache: "no-store" },
+      { headers, cache: "no-store", signal: AbortSignal.timeout(SUPABASE_TIMEOUT_MS) },
     );
     if (!res.ok) throw new Error(`Supabase read failed: ${res.status}`);
     return ((await res.json()) as Row[]).map(toRecord);
@@ -79,6 +99,7 @@ export function createSupabaseStore(
         method: "POST",
         headers: { ...headers, Prefer: "return=minimal" },
         body: JSON.stringify(row),
+        signal: AbortSignal.timeout(SUPABASE_TIMEOUT_MS),
       });
       // 409 is PostgREST's answer to the unique (date_key, division, player_id) constraint.
       if (res.status === 409) return "duplicate";
