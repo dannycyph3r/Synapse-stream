@@ -57,12 +57,27 @@ export const SequenceDisplay = forwardRef<
             <Check aria-hidden="true" className="size-[clamp(1.5rem,7svh,3.25rem)]" strokeWidth={1.75} />
             <span className="num text-[clamp(1.25rem,4svh,1.75rem)] leading-none">{formatDelta(state.lastContributionMs)}</span>
             {quote ? (
-              <p data-testid="round-quote" className="line-clamp-3 max-w-[18rem] text-[0.8125rem] leading-snug text-on-inverse-2 sm:text-small">
-                {quote}
+              <p data-testid="round-quote" className="stage-quote line-clamp-3 max-w-[17rem]">
+                &ldquo;{quote}&rdquo;
               </p>
             ) : null}
           </div>
         );
+        break;
+      case "ended":
+        // A short beat after a miss: the mark cracks apart before the results.
+        caption = state.endReason === "mismatch" ? "Broken" : "Ended";
+        body =
+          state.endReason === "mismatch" ? (
+            <svg viewBox="0 0 100 100" className="break-mark" aria-hidden="true">
+              <g stroke="currentColor" strokeWidth="7" strokeLinecap="square">
+                <line className="break-a" x1="22" y1="22" x2="47" y2="47" />
+                <line className="break-b" x1="53" y1="53" x2="78" y2="78" />
+                <line className="break-c" x1="78" y1="22" x2="53" y2="47" />
+                <line className="break-d" x1="47" y1="53" x2="22" y2="78" />
+              </g>
+            </svg>
+          ) : null;
         break;
       case "paused":
         caption = "Paused";
@@ -107,6 +122,10 @@ export function SequenceSlots({ state }: { state: GameState }) {
   const recalling = state.status === "recalling";
   const pos = observePosition(state);
   const cells = Array.from({ length: c.length }, (_, i) => {
+    if (state.status === "ended" && state.failure) {
+      const t = state.answer[i] ?? null;
+      return { state: state.failure.mismatches.includes(i + 1) ? "miss" : "filled", token: t };
+    }
     if (recalling || state.status === "feedback" || (state.status === "paused" && state.pausedFrom === "recalling")) {
       const t = state.answer[i];
       const isNext = recalling && i === state.answer.length;

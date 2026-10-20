@@ -5,8 +5,8 @@ import { bankedFei, comparisonRow, dailySequence, enter, label, resultsHeading, 
 test.describe("daily challenge", () => {
   test("ranked run, validated posting, leaderboard, and no replay", async ({ page }) => {
     await page.goto("/play?mode=daily");
-    await expect(page.getByText(`Daily · ${utcDateKey(new Date())} UTC`)).toBeVisible();
-    await page.getByRole("button", { name: /Begin ranked run/ }).click();
+    await expect(page.getByText(`Daily · ${utcDateKey(new Date())}`)).toBeVisible();
+    await page.getByRole("button", { name: /Play ranked run/ }).click();
     await waitForRecall(page);
     await enter(page, dailySequence(0));
     await submit(page);
@@ -16,7 +16,7 @@ test.describe("daily challenge", () => {
     await enter(page, [wrongFor(seq[0]!), ...seq.slice(1)]);
     await submit(page);
 
-    await expect(resultsHeading(page)).toHaveText("Position 1 did not match.");
+    await expect(resultsHeading(page)).toHaveText("Pattern broken.");
     // Ranked runs reveal the failed pattern too, after the answer is in.
     expect(await comparisonRow(page, "Your pattern")).toEqual([wrongFor(seq[0]!), ...seq.slice(1)].map(label));
     expect(await comparisonRow(page, "Correct pattern")).toEqual(seq.map(label));
@@ -50,7 +50,7 @@ test.describe("daily challenge", () => {
 
   test("a reload mid-run records the interrupted run from its answers", async ({ page }) => {
     await page.goto("/play?mode=daily");
-    await page.getByRole("button", { name: /Begin ranked run/ }).click();
+    await page.getByRole("button", { name: /Play ranked run/ }).click();
     await waitForRecall(page);
     await enter(page, dailySequence(0));
     await submit(page);
@@ -67,7 +67,7 @@ test.describe("daily challenge", () => {
 
   test("leaving a ranked run asks first, and keep playing returns to the pause", async ({ page }) => {
     await page.goto("/play?mode=daily");
-    await page.getByRole("button", { name: /Begin ranked run/ }).click();
+    await page.getByRole("button", { name: /Play ranked run/ }).click();
     await expect(page.locator(".stage svg")).toBeVisible({ timeout: 10_000 });
     await page.getByRole("button", { name: "Exit" }).click();
     const confirm = page.getByRole("dialog", { name: "End today's ranked run?" });

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
+import "@fontsource-variable/bodoni-moda/opsz-italic.css";
 import "./globals.css";
 import { Announcer } from "@/components/Announcer";
 import { PreferenceSync } from "@/components/PreferenceSync";

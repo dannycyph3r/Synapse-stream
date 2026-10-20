@@ -47,7 +47,7 @@ test.describe("practice game loop", () => {
 
     const heading = resultsHeading(page);
     await expect(heading).toBeFocused();
-    await expect(heading).toHaveText(/did not match\.$/);
+    await expect(heading).toHaveText("Pattern broken.");
     expect(await comparisonRow(page, "Your pattern")).toEqual(answer.map(label));
     expect(await comparisonRow(page, "Correct pattern")).toEqual(seq.map(label));
     // The failed round adds nothing: FEI is still the single held round.
@@ -60,12 +60,23 @@ test.describe("practice game loop", () => {
     await waitForRecall(page);
     const seq = practiceSequence(0);
     await failRound(page, seq, 2);
-    await expect(resultsHeading(page)).toHaveText("Position 2 did not match.");
+    await expect(resultsHeading(page)).toHaveText("Pattern broken.");
+    // The redundant sentences are gone; the comparison carries the meaning.
+    const visibleSentences = await page.evaluate(() => {
+      const walker = document.createTreeWalker(document.querySelector("main")!, NodeFilter.SHOW_TEXT);
+      const hits: string[] = [];
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        if (n.parentElement?.closest(".sr-only")) continue;
+        if (/did not match|you entered/.test(n.textContent ?? "")) hits.push(n.textContent!);
+      }
+      return hits;
+    });
+    expect(visibleSentences).toEqual([]);
+    await expect(page.getByRole("heading", { level: 2, name: /Position 2 did not match\./ })).toBeAttached();
     const header = page.getByTestId("pattern-comparison").getByRole("columnheader", { name: /Position 2/ });
     await expect(header).toHaveAccessibleName("Position 2, did not match");
     await expect(header).toHaveAttribute("data-miss", "true");
     await expect(page.getByRole("columnheader", { name: /Position 1/ })).not.toHaveAttribute("data-miss", "true");
-    await expect(page.getByText(`At 2 you entered ${label(wrongFor(seq[1]!))}; the pattern had ${label(seq[1]!)}.`)).toBeVisible();
     // A different line follows a failed round, from the failure pool.
     const quote = (await page.getByTestId("failure-quote").innerText()).trim();
     expect(failureTexts.has(quote)).toBe(true);
@@ -74,7 +85,7 @@ test.describe("practice game loop", () => {
 
   test("keyboard: play, then reach the comparison and every results action", async ({ page }) => {
     await page.goto(`/play?mode=practice&seed=${SEED}`);
-    await page.getByRole("button", { name: "Begin", exact: true }).focus();
+    await page.getByRole("button", { name: "Play", exact: true }).focus();
     await page.keyboard.press("Enter");
     await waitForRecall(page);
 
@@ -154,7 +165,8 @@ test.describe("practice game loop", () => {
     await submit(page);
     const first = page.getByTestId("round-quote");
     await expect(first).toBeVisible();
-    const q1 = (await first.innerText()).trim();
+    const unquote = (t: string) => t.trim().replace(/^\u201c|\u201d$/g, "");
+    const q1 = unquote(await first.innerText());
     expect(successTexts.has(q1)).toBe(true);
     expect(await page.locator(".game-keypad").evaluate((el) => el.getBoundingClientRect().top)).toBe(keypadTop);
     // During the beat the strip already shows the coming round.
@@ -164,7 +176,7 @@ test.describe("practice game loop", () => {
     await expect(page.getByTestId("round-quote")).toHaveCount(0);
     await enter(page, practiceSequence(1));
     await submit(page);
-    const q2 = (await page.getByTestId("round-quote").innerText()).trim();
+    const q2 = unquote(await page.getByTestId("round-quote").innerText());
     expect(successTexts.has(q2)).toBe(true);
     expect(q2).not.toBe(q1);
     // It is spoken too: the polite live region carries the line.
@@ -214,13 +226,13 @@ test.describe("practice game loop", () => {
     await expect(bankedFei(page)).toHaveText("00:04.5");
   });
 
-  test("returning players go straight from Begin to the countdown", async ({ page }) => {
+  test("returning players go straight from Play to the countdown", async ({ page }) => {
     await startPractice(page);
     await page.getByRole("button", { name: "Exit" }).click();
     await page.goto("/");
-    await page.getByRole("link", { name: "Begin", exact: true }).click();
+    await page.getByRole("link", { name: "Play", exact: true }).click();
     await expect(page.locator(".game-root")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Begin", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Play", exact: true })).toHaveCount(0);
     await waitForRecall(page);
   });
 
@@ -283,8 +295,8 @@ test.describe("spoken presentation", () => {
     await page.goto("/settings");
     await page.getByRole("radio", { name: /Spoken/ }).check();
     await page.goto(`/play?mode=practice&seed=${SEED}`);
-    await page.getByRole("button", { name: "Begin", exact: true }).click();
-    await expect(page.getByText(/Practice · Foundation · Spoken · Seed E2E/).first()).toBeVisible();
+    await page.getByRole("button", { name: "Play", exact: true }).click();
+    await expect(page.locator(".game-root header")).toContainText("Spoken, Practice · Foundation · E2E");
     await waitForRecall(page);
     const seq = buildChallenge(practiceConfig("spoken", "foundation", "unused", SEED), 0).sequence;
     const spoken = await page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken);
@@ -303,5 +315,49 @@ test.describe("spoken presentation", () => {
       for (const t of practiceSequence(0)) expect(text).not.toContain(label(t));
       await page.waitForTimeout(1500);
     }
+  });
+});
+
+test.describe("design details", () => {
+  test("a miss shows a short break on the board before the results", async ({ page }) => {
+    await startPractice(page);
+    await waitForRecall(page);
+    const seq = practiceSequence(0);
+    await failRound(page, seq, 2);
+    // The board stays up briefly: the stage reads "Broken" and the missed cell is marked.
+    await expect(page.locator(".stage")).toContainText("Broken");
+    await expect(page.locator('.slot[data-state="miss"]')).toHaveCount(1);
+    await expect(page.locator('.slot[data-state="miss"]')).toHaveAttribute("data-state", "miss");
+    await expect(page.getByTestId("pattern-comparison")).toHaveCount(0);
+    // Then the results take over, with focus on the heading.
+    await expect(resultsHeading(page)).toBeFocused({ timeout: 5000 });
+    await expect(page.getByTestId("pattern-comparison")).toBeVisible();
+  });
+
+  test("the mode is a tag with a presentation icon, not a run of words", async ({ page }) => {
+    await startPractice(page);
+    const tag = page.locator(".game-root header p.label");
+    await expect(tag).toContainText("Practice · Foundation · E2E");
+    await expect(tag).not.toContainText("Visual ·");
+    await expect(tag.locator("svg")).toHaveCount(1);
+    await expect(tag.locator(".sr-only")).toHaveText("Visual,");
+  });
+
+  test("quotes are set in the neoclassical italic", async ({ page }) => {
+    await startPractice(page);
+    await waitForRecall(page);
+    await enter(page, practiceSequence(0));
+    await submit(page);
+    const round = page.getByTestId("round-quote");
+    await expect(round).toBeVisible();
+    expect(await round.evaluate((el) => getComputedStyle(el).fontFamily)).toContain("Bodoni Moda");
+    expect(await round.evaluate((el) => getComputedStyle(el).fontStyle)).toBe("italic");
+    await waitForRecall(page);
+    await failRound(page, practiceSequence(1));
+    const fail = page.getByTestId("failure-quote");
+    await expect(fail).toBeVisible();
+    expect(await fail.evaluate((el) => getComputedStyle(el).fontFamily)).toContain("Bodoni Moda");
+    // The font file actually loaded, rather than falling back.
+    expect(await page.evaluate(() => document.fonts.check('italic 500 24px "Bodoni Moda Variable"'))).toBe(true);
   });
 });

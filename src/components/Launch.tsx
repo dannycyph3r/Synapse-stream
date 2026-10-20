@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { NavLinks } from "./AppShell";
+import { GlitchWord } from "./GlitchWord";
 import { Wordmark } from "./Wordmark";
 import { utcDateKey } from "@/lib/game/daily";
 import { practiceLevel } from "@/lib/game/rules";
@@ -42,14 +43,16 @@ export function Launch() {
         tabIndex={-1}
         className="mx-auto flex w-full max-w-[64rem] flex-1 flex-col justify-center px-4 py-10 outline-none sm:px-8 [@media(max-height:500px)]:py-3"
       >
-        <h1 className="max-w-[12ch] text-display font-semibold">Hold the pattern.</h1>
+        <h1 aria-label="Hold the pattern." className="max-w-[12ch] text-display font-semibold">
+          Hold the <GlitchWord suffix="." />
+        </h1>
         <p className="mt-5 max-w-[34rem] text-lead text-ink-2">
           Watch a short sequence of symbols, then rebuild it in order.
         </p>
 
         <div className="mt-10 grid max-w-[22rem] gap-5 [@media(max-height:500px)]:mt-5 [@media(max-height:500px)]:gap-2">
           <Link href="/play?mode=practice" className="btn btn-primary min-h-14 text-[1.0625rem]">
-            Begin
+            Play
             <ArrowRight aria-hidden="true" className="size-5" />
           </Link>
           <div className="grid gap-1">

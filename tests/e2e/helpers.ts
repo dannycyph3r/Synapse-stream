@@ -60,7 +60,7 @@ export function roundNumber(page: Page) {
 /** A fresh browser context has never seen the rules, so the start screen shows once. */
 export async function startPractice(page: Page, query = "") {
   await page.goto(`/play?mode=practice&seed=${SEED}${query}`);
-  await page.getByRole("button", { name: "Begin", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
 }
 
 export function resultsHeading(page: Page) {

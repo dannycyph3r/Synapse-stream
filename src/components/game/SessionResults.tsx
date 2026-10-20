@@ -5,11 +5,12 @@ import { forwardRef, useState } from "react";
 import { RotateCcw, Share2 } from "lucide-react";
 import { announce } from "@/components/Announcer";
 import type { FailureRecord, RunMode } from "@/lib/game/engine";
-import { mismatchDetails, mismatchSentence } from "@/lib/game/feedback";
+import { mismatchSentence } from "@/lib/game/feedback";
 import { practiceLevel } from "@/lib/game/rules";
 import { describeFei, formatDelta, formatFei } from "@/lib/game/scoring";
 import type { Quote } from "@/lib/quotes";
 import type { RunSummary } from "@/lib/storage/schema";
+import { ModeTag } from "./ModeTag";
 import { PatternComparison } from "./PatternComparison";
 import { PostScore } from "./PostScore";
 
@@ -40,7 +41,8 @@ export function shareText(s: RunSummary): string {
 }
 
 function headline(result: RunResult): { title: string; sub: string | null } {
-  if (result.failure) return { title: mismatchSentence(result.failure.mismatches), sub: null };
+  // The comparison shows where it broke; the heading only names the moment.
+  if (result.failure) return { title: "Pattern broken.", sub: null };
   if (result.summary.endReason === "interrupted") {
     return { title: "Run recorded", sub: "The run was interrupted by a reload or a closed tab. Everything held before that is banked." };
   }
@@ -73,7 +75,7 @@ export const SessionResults = forwardRef<HTMLHeadingElement, { result: RunResult
 
     return (
       <div className="pt-6 sm:pt-10">
-        <p className="label">{modeTitle(s.mode)}</p>
+        <ModeTag mode={s.mode} />
         <h1 ref={headingRef} tabIndex={-1} className="mt-2 max-w-[22ch] text-headline font-semibold outline-none">
           {title}
         </h1>
@@ -83,14 +85,9 @@ export const SessionResults = forwardRef<HTMLHeadingElement, { result: RunResult
           {failure ? (
             <section aria-labelledby="compare-h" className="min-w-0">
               <h2 id="compare-h" className="sr-only">
-                Your pattern and the correct pattern
+                Your pattern and the correct pattern. {mismatchSentence(failure.mismatches)}
               </h2>
               <PatternComparison failure={failure} />
-              <ul className="mt-3 grid gap-0.5 text-small text-ink-2">
-                {mismatchDetails(failure).map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
             </section>
           ) : null}
 
@@ -126,9 +123,11 @@ export const SessionResults = forwardRef<HTMLHeadingElement, { result: RunResult
               </div>
             </dl>
             {quote ? (
-              <blockquote className="quote mt-6" data-testid="failure-quote">
-                <p>{quote.text}</p>
-              </blockquote>
+              <figure className="mt-8">
+                <blockquote className="quote" data-testid="failure-quote">
+                  <p>{quote.text}</p>
+                </blockquote>
+              </figure>
             ) : null}
           </section>
         </div>

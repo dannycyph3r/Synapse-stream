@@ -96,9 +96,9 @@ for (const vp of VIEWPORTS) {
       await expect(page.getByRole("list", { name: "Your answer, 1 of 3 placed" })).toBeVisible();
     });
 
-    test("the launch screen puts Begin above the fold", async ({ page }) => {
+    test("the launch screen puts Play above the fold", async ({ page }) => {
       await page.goto("/");
-      const begin = await page.getByRole("link", { name: "Begin", exact: true }).boundingBox();
+      const begin = await page.getByRole("link", { name: "Play", exact: true }).boundingBox();
       const innerH = await page.evaluate(() => window.innerHeight);
       expect(begin!.y + begin!.height).toBeLessThanOrEqual(innerH);
       expect(begin!.height).toBeGreaterThanOrEqual(48);

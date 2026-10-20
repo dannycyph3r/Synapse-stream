@@ -214,7 +214,7 @@ export function SettingsPanel() {
           />
           <Switch
             label="Start screen before practice"
-            description="Show a short prompt before each practice run. When off, Begin goes straight to the countdown."
+            description="Show a short prompt before each practice run. When off, Play goes straight to the countdown."
             checked={!s.rulesSeen}
             onChange={(on) => save({ rulesSeen: !on })}
           />

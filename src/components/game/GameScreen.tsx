@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pause, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Dialog } from "@/components/Dialog";
-import { Mark } from "@/components/Wordmark";
 import { useGameSession } from "@/hooks/useGameSession";
 import { dailyConfig, isInRun, practiceConfig, type GameState, type RunConfig } from "@/lib/game/engine";
 import { formatCountdown, msUntilNextUtcDay, utcDateKey } from "@/lib/game/daily";
@@ -25,10 +24,13 @@ import { FocusMetrics } from "./FocusMetrics";
 import { PostScore } from "./PostScore";
 import { PrepareScreen } from "./PrepareScreen";
 import { SequenceDisplay, SequenceSlots } from "./SequenceDisplay";
+import { ModeTag } from "./ModeTag";
 import { SessionResults, modeTitle, type RunResult } from "./SessionResults";
 import { TokenInput } from "./TokenInput";
 
 const SEED_PATTERN = /^[A-Za-z0-9-]{1,24}$/;
+/** How long a broken pattern stays on the board before the results screen. */
+export const BREAK_MS = 1100;
 
 /** Reads the URL and local records, then hands a fixed setup to the controller. */
 export function GameScreen() {
@@ -117,6 +119,7 @@ function GameController({
   const [confirmExit, setConfirmExit] = useState(false);
   const startedHere = useRef(false);
   const recordedRun = useRef<number | null>(null);
+  const pendingResult = useRef<RunResult | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const firstKeyRef = useRef<HTMLButtonElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -210,14 +213,30 @@ function GameController({
       advanceQuotes("failure");
     }
     const r = rec.value;
-    resultStore.set({
+    // Records are saved immediately; only the screen change waits, so a miss
+    // gets a short "break" beat on the board before the results appear.
+    pendingResult.current = {
       summary,
       previousBestMs: r?.previousBestMs ?? null,
       isPersonalBest: r?.isPersonalBest ?? false,
       failure,
       quote,
-    });
+    };
   }, [state, resultStore]);
+
+  const endedRun = state.status === "ended" ? state.runId : null;
+  const endedOnMiss = state.status === "ended" && state.endReason === "mismatch";
+  useEffect(() => {
+    if (endedRun === null) return;
+    const id = window.setTimeout(
+      () => {
+        if (pendingResult.current) resultStore.set(pendingResult.current);
+        pendingResult.current = null;
+      },
+      endedOnMiss ? BREAK_MS : 0,
+    );
+    return () => window.clearTimeout(id);
+  }, [endedRun, endedOnMiss, resultStore]);
 
   // One success line per held challenge.
   const feedbackEpoch = state.status === "feedback" ? state.epoch : null;
@@ -311,7 +330,8 @@ function GameController({
   }
 
   const entry = data.daily[key];
-  if (daily && entry?.status === "finished") {
+  // A run that has just ended stays on the board until its results are ready.
+  if (daily && entry?.status === "finished" && state.status !== "ended") {
     return <DailyComplete dateKey={setup.dateKey} division={setup.division} entry={entry} />;
   }
 
@@ -337,11 +357,8 @@ function GameController({
   return (
     <div className="game-root">
       <header className="mx-auto flex w-full max-w-[34rem] items-center justify-between gap-2 px-4 pt-1 [@media(orientation:landscape)_and_(max-height:540px)]:max-w-[52rem]">
-        <div className="flex min-w-0 items-center gap-2">
-          <Mark className="size-5 shrink-0" />
-          <p className="label truncate">{modeTitle(state.config.mode)}</p>
-        </div>
-        <div className="-mr-2 flex shrink-0">
+        <ModeTag mode={state.config.mode} compact />
+        <div className="-mr-2 flex shrink-0" inert={state.status === "ended"}>
           <button type="button" className="btn btn-quiet min-h-11 px-2.5" onClick={() => dispatch({ type: "pause" })} aria-keyshortcuts="Escape">
             <Pause aria-hidden="true" className="size-4" />
             Pause
@@ -447,7 +464,7 @@ function DailyComplete({
   return (
     <AppShell>
       <div className="pt-8 sm:pt-12">
-        <p className="label">{modeTitle({ kind: "daily", dateKey, division })}</p>
+        <ModeTag mode={{ kind: "daily", dateKey, division }} />
         <h1 ref={headingRef} tabIndex={-1} className="mt-2 text-headline font-semibold outline-none">
           Today&apos;s run is in.
         </h1>

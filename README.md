@@ -8,9 +8,9 @@ SYNAPSE is a focus-training game. It is not a medical, diagnostic or therapeutic
 
 ## What is in it
 
-- **Launch screen** (`/`). The wordmark, one statement, a dominant *Begin*, a quiet daily-challenge link, a one-line personal best once one exists, and quiet links to Help, Settings, Leaderboard and Stats. Nothing else.
-- **Gameplay** (`/play`). A single dominant stage, a four-figure instrument strip (round, tokens, time per token, FEI), position cells that make repeated tokens legible, and an eight-key keypad. Navigation disappears once a run starts. Returning players go straight from *Begin* to the countdown; first-time players and every daily run see a three-line start screen.
-- **Failed-pattern reveal.** After a miss the results lead with which positions did not match, then show *Your pattern* above the *Correct pattern*, aligned by position.
+- **Launch screen** (`/`). The wordmark, one statement, a dominant *Play*, a quiet daily-challenge link, a one-line personal best once one exists, and quiet links to Help, Settings, Leaderboard and Stats. Nothing else.
+- **Gameplay** (`/play`). A single dominant stage, a four-figure instrument strip (round, tokens, time per token, FEI), position cells that make repeated tokens legible, and an eight-key keypad. Navigation disappears once a run starts. Returning players go straight from *Play* to the countdown; first-time players and every daily run see a three-line start screen.
+- **Failed-pattern reveal.** After a miss the board holds for 1.1 s with the broken cells marked, then the results show *Your pattern* above the *Correct pattern*, aligned by position, under the heading "Pattern broken."
 - **Round lines.** A short original line appears after every held round, and a different kind of line after a failed one.
 - **Results.** FEI, previous best, rounds held and longest sequence, play again, and a share summary that contains no answers.
 - **Help** (`/help`). Every instruction lives here: observe and recall, scoring and FEI, what happens after a miss, keyboard controls, modes and ranking, and accessibility options.
@@ -125,9 +125,10 @@ When a submission does not match, the engine's `submit` transition records a `Fa
 
 - The record only exists after a submission, so the correct pattern is never in the page before the player has answered.
 - Score, completed count, streak and difficulty are left exactly as they were; the transition goes straight to `ended`, where every further action is ignored.
-- The comparison is a real table: column headers are positions, row headers are *Your pattern* and *Correct pattern*, and every cell carries its token name for screen readers. A mismatch is marked by structure (inverted position number, heavier outline) and named in words, for example "Position 3 did not match." and "At 3 you entered Circle; the pattern had Triangle." Nothing relies on colour.
+- The comparison is a real table: column headers are positions, row headers are *Your pattern* and *Correct pattern*, and every cell carries its token name for screen readers. A mismatch is marked by structure (inverted position number, heavier outline). The comparison carries the meaning visually, so there is no repeated sentence on screen; screen readers get "Position 3 did not match." in the section heading, the column headers and the live announcement. Nothing relies on colour.
 - Long sequences are split into blocks of six positions, so twelve tokens fit a 320 px screen without sideways scrolling.
-- Focus moves to the results heading, which is the mismatch sentence; the assertive live region announces it as well.
+- Before the results, the board holds for `BREAK_MS` (1.1 s): the stage shows a cross that cracks apart and the missed cells invert and knock once sideways. Records are saved first; only the screen change waits. Reduced motion keeps the beat but removes the movement.
+- Focus then moves to the results heading, "Pattern broken."; the assertive live region names the mismatched positions.
 
 This applies to ranked daily runs too. Because every player gets the same daily sequences, a revealed daily pattern could be shared. The daily seed is already public (see [Anti-cheat limits](#anti-cheat-limits)), so this does not open a new class of weakness, but it does make one easier to use.
 
@@ -137,7 +138,11 @@ This applies to ranked daily runs too. Because every player gets the same daily 
 
 Selection is deterministic per browser tab. `src/lib/quoteSession.ts` keeps a random session seed and a cursor per pool in `sessionStorage`. `selectQuote(kind, seed, index)` walks a seeded shuffle of the pool, so no line repeats until the pool is exhausted, and a new pass never opens with the line that closed the previous one. A run reads the cursor once at its start; the n-th held round shows line `base + n - 1`.
 
-The success line sits inside the stage during the feedback beat, under the gain, so it cannot move any control. It is also appended to the polite announcement. The failure line sits under the score on the results screen. Neither animates beyond the shared fade, which reduced motion removes.
+The success line sits inside the stage during the feedback beat, under the gain, so it cannot move any control. It is also appended to the polite announcement. The failure line sits under the score on the results screen, under a large hanging quotation mark. Both are set in Bodoni Moda italic, a Didone (neoclassical) face with optical sizing: the one serif voice in an otherwise Swiss interface. Neither animates beyond the shared fade, which reduced motion removes.
+
+## Launch word
+
+On the launch screen, "pattern" glitches through Korean, Greek, Hindi, Japanese, Russian and Arabic and settles back, once, in under five seconds; hovering or tapping it replays the sequence. A five-second limit matters because WCAG 2.2.2 requires a pause control for automatic motion that runs longer. Every script is laid out from the first paint in one grid cell, so nothing on the page moves while the word changes. The word is decorative: the heading's accessible name stays "Hold the pattern.", and reduced motion keeps it still.
 
 ## Daily challenge generation
 

@@ -136,10 +136,10 @@ export function Help() {
 
         <Section id="miss" title="After a miss">
           <p>
-            One incorrect answer ends the run. The results screen then shows <strong>Your pattern</strong> above the{" "}
-            <strong>Correct pattern</strong>, aligned by position. Positions that did not match have an inverted
-            position number and a heavier outline, and are listed in words, for example &ldquo;Position 3 did not
-            match.&rdquo;
+            One incorrect answer ends the run. The board holds for a moment, with the cells that broke marked, then the
+            results screen shows <strong>Your pattern</strong> above the <strong>Correct pattern</strong>, aligned by
+            position. Positions that did not match have an inverted position number and a heavier outline. Screen readers
+            hear which positions did not match.
           </p>
           <p>
             The correct pattern is shown only after you submit. The failed challenge adds nothing to your score and does

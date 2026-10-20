@@ -197,21 +197,10 @@ describe("quotes", () => {
 });
 
 describe("failure copy", () => {
-  it("names the mismatched positions in plain language", async () => {
-    const { mismatchSentence, mismatchDetails } = await import("@/lib/game/feedback");
+  it("names the mismatched positions for assistive technology", async () => {
+    const { mismatchSentence } = await import("@/lib/game/feedback");
     expect(mismatchSentence([3])).toBe("Position 3 did not match.");
     expect(mismatchSentence([2, 5])).toBe("Positions 2 and 5 did not match.");
     expect(mismatchSentence([1, 2, 4])).toBe("Positions 1, 2 and 4 did not match.");
-    const f = {
-      index: 0, length: 5, durationMs: 1500,
-      expected: ["circle", "star", "star", "arc", "bars"] as TokenId[],
-      answer: ["circle", "star", "arc", "star", "cross"] as TokenId[],
-      mismatches: [3, 4, 5],
-    };
-    expect(mismatchDetails(f, 2)).toEqual([
-      "At 3 you entered Arc; the pattern had Star.",
-      "At 4 you entered Star; the pattern had Arc.",
-      "1 more position also differed.",
-    ]);
   });
 });

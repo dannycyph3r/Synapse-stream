@@ -4,6 +4,7 @@ import Link from "next/link";
 import { forwardRef } from "react";
 import { ArrowRight } from "lucide-react";
 import type { RunConfig } from "@/lib/game/engine";
+import { ModeTag } from "./ModeTag";
 
 /**
  * The start screen. Shown for every daily run (a one-shot ranked attempt) and
@@ -24,7 +25,7 @@ export const PrepareScreen = forwardRef<
 
   return (
     <div className="pt-8 sm:pt-12">
-      <p className="label">{daily ? `Daily · ${config.mode.kind === "daily" ? config.mode.dateKey : ""} UTC` : "Practice"}</p>
+      <ModeTag mode={config.mode} />
       <h1 ref={headingRef} tabIndex={-1} className="mt-2 text-headline font-semibold outline-none">
         {daily ? "Daily challenge" : "Hold the pattern."}
       </h1>
@@ -57,7 +58,7 @@ export const PrepareScreen = forwardRef<
 
       <div className="mt-8 grid max-w-[22rem] gap-3">
         <button type="button" className="btn btn-primary min-h-14 text-[1.0625rem]" onClick={onBegin}>
-          {daily ? "Begin ranked run" : "Begin"}
+          {daily ? "Play ranked run" : "Play"}
           <ArrowRight aria-hidden="true" className="size-5" />
         </button>
         <Link href={daily ? "/help#modes" : "/help"} className="link inline-flex min-h-11 items-center self-start text-small text-ink-2">
